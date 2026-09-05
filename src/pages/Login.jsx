@@ -1,454 +1,279 @@
-import { useEffect, useState } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
-import {
-  ArrowRight,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Loader2,
-  LockKeyhole,
-  Mail,
-} from "lucide-react"
-
-import { supabase } from "../supabase"
-import ThemeToggle from "../components/ThemeToggle"
+import { useState } from "react";
+import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 
 function Login() {
-  const navigate = useNavigate()
-  const location = useLocation()
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [loading, setLoading] = useState(false)
-  const [resending, setResending] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
+  const from =
+    location.state?.from && typeof location.state.from === "string"
+      ? location.state.from
+      : "/dashboard";
 
-  const [needsVerification, setNeedsVerification] =
-    useState(false)
+  const handleLogin = async (event) => {
+    event.preventDefault();
 
-  useEffect(() => {
-    const verificationComplete =
-      new URLSearchParams(location.search).get("verified")
+    setErrorMessage("");
+    setSuccessMessage("");
 
-    if (verificationComplete === "1") {
-      setMessage(
-        "Email verified successfully. You can now access your Sportiva account."
-      )
-
-      window.history.replaceState(
-        {},
-        "",
-        "/login"
-      )
-    }
-  }, [location.search])
-
-  async function handleLogin(event) {
-    event.preventDefault()
-
-    setLoading(true)
-    setError("")
-    setMessage("")
-    setNeedsVerification(false)
-
-    const cleanEmail = email.trim().toLowerCase()
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !password) {
-      setError("Please enter your email and password.")
-      setLoading(false)
-      return
+      setErrorMessage("Please enter your email and password.");
+      return;
     }
 
     try {
-      const { data, error: loginError } =
+      setLoading(true);
+
+      const { data, error } =
         await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password,
-        })
+        });
 
-      if (loginError) {
-        throw loginError
+      if (error) throw error;
+
+      if (!data?.user) {
+        throw new Error("Unable to sign in.");
       }
 
-      const user = data?.user
+      navigate(from, { replace: true });
+    } catch (error) {
+      console.error("Login error:", error);
 
-      if (!user) {
-        throw new Error("We couldn't sign you in.")
-      }
-
-      /*
-       * Extra protection in case Supabase's email confirmation
-       * setting is changed later.
-       */
-      if (!user.email_confirmed_at) {
-        await supabase.auth.signOut()
-
-        setNeedsVerification(true)
-        setError(
-          "Please verify your email address before logging in."
-        )
-        return
-      }
-
-      navigate(
-        location.state?.from?.pathname || "/dashboard",
-        {
-          replace: true,
-        }
-      )
-    } catch (err) {
-      console.error("Login error:", err)
-
-      const messageText = String(err?.message || "")
+      const message = String(error.message || "").toLowerCase();
 
       if (
-        messageText.toLowerCase().includes("email not confirmed")
+        message.includes("invalid login credentials") ||
+        message.includes("invalid credentials")
       ) {
-        setNeedsVerification(true)
-        setError(
-          "Please verify your email address before logging in."
-        )
+        setErrorMessage(
+          "Incorrect email or password. Please try again."
+        );
+      } else if (message.includes("email not confirmed")) {
+        setErrorMessage(
+          "Email confirmation is currently required by the Supabase project."
+        );
       } else {
-        setError(
-          "Invalid email or password. Please try again."
-        )
+        setErrorMessage(
+          error.message || "Unable to sign in."
+        );
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  async function handleResendVerification() {
-    const cleanEmail = email.trim().toLowerCase()
+  const handleForgotPassword = async () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail) {
-      setError(
-        "Enter your email address first so we can resend the verification email."
-      )
-      return
+      setErrorMessage(
+        "Enter your email address first, then choose Forgot password."
+      );
+      return;
     }
-
-    setResending(true)
-    setError("")
-    setMessage("")
 
     try {
-      const { error: resendError } =
-        await supabase.auth.resend({
-          type: "signup",
-          email: cleanEmail,
-          options: {
-            emailRedirectTo: `${window.location.origin}/login?verified=1`,
-          },
-        })
+      setLoading(true);
 
-      if (resendError) {
-        throw resendError
-      }
+      const redirectTo = `${window.location.origin}/reset-password`;
 
-      setMessage(
-        "A new verification email has been sent. Check your inbox."
-      )
-    } catch (err) {
-      console.error("Resend verification error:", err)
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        cleanEmail,
+        {
+          redirectTo,
+        }
+      );
 
-      setError(
-        "We couldn't resend the verification email. Please try again later."
-      )
+      if (error) throw error;
+
+      setSuccessMessage(
+        "Password reset instructions have been sent if this email is registered."
+      );
+    } catch (error) {
+      console.error("Password reset error:", error);
+
+      setErrorMessage(
+        error.message || "Unable to send password reset instructions."
+      );
     } finally {
-      setResending(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div
-      className="
-        min-h-screen
-        bg-[#F6F7F3]
-        text-[#123B27]
-        dark:bg-[#0B110E]
-        dark:text-white
-      "
-    >
-      <header
-        className="
-          flex h-[72px] items-center justify-between
-          border-b border-black/[0.06]
-          px-4 sm:px-6
-          dark:border-white/[0.06]
-        "
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#123B27] text-[#B7E600]">
-            <span className="text-xs font-black italic">
-              S
-            </span>
-          </div>
-
-          <span className="text-sm font-black tracking-[0.16em]">
-            SPORTIVA
-          </span>
-        </div>
-
-        <ThemeToggle />
-      </header>
-
-      <main className="mx-auto flex min-h-[calc(100vh-72px)] max-w-md items-center px-4 py-10">
-        <section className="w-full">
-          <div className="mb-7">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35 dark:text-white/25">
-              Welcome back
-            </p>
-
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">
-              Log in to Sportiva
-            </h1>
-
-            <p className="mt-2 text-sm text-black/45 dark:text-white/40">
-              Access your bookings and account.
-            </p>
-          </div>
-
-          {message && (
-            <div
-              className="
-                mb-5 flex items-start gap-2
-                rounded-xl
-                border border-emerald-500/15
-                bg-emerald-500/[0.06]
-                px-4 py-3
-                text-sm text-emerald-600
-                dark:text-emerald-400
-              "
-            >
-              <CheckCircle2
-                size={16}
-                className="mt-0.5 shrink-0"
-              />
-
-              <span>{message}</span>
-            </div>
-          )}
-
-          {error && (
-            <div
-              className="
-                mb-5 rounded-xl
-                border border-red-500/15
-                bg-red-500/[0.06]
-                px-4 py-3
-                text-sm text-red-600
-                dark:text-red-400
-              "
-            >
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
+    <div className="min-h-screen bg-[#f4f7f5] px-4 py-8 text-[#17221d]">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl items-center justify-center">
+        <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border border-[#dfe9e2] bg-white shadow-[0_24px_80px_rgba(16,37,27,0.08)] lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="hidden bg-[#10251b] p-10 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
-              <label
-                htmlFor="email"
-                className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-black/40 dark:text-white/35"
-              >
-                Email address
-              </label>
+              <div className="text-2xl font-black tracking-[1px]">
+                SPORT<span className="text-[#55a96f]">IVA</span>
+              </div>
 
-              <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
-                />
-
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  className="
-                    h-12 w-full rounded-xl
-                    border border-black/[0.08]
-                    bg-white
-                    pl-11 pr-4
-                    text-sm outline-none
-                    focus:border-[#123B27]/30
-                    focus:ring-2 focus:ring-[#123B27]/10
-                    dark:border-white/[0.08]
-                    dark:bg-white/[0.035]
-                    dark:focus:border-[#B7E600]/30
-                    dark:focus:ring-[#B7E600]/10
-                  "
-                />
+              <div className="mt-2 text-[9px] font-extrabold tracking-[2px] text-[#81958a]">
+                ART OF ACTIVE LIVING
               </div>
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="text-[10px] font-bold uppercase tracking-[0.14em] text-black/40 dark:text-white/35"
-                >
-                  Password
+              <div className="mb-3 text-[9px] font-extrabold tracking-[1.8px] text-[#55a96f]">
+                THE SPORTIVA
+              </div>
+
+              <h1 className="text-4xl font-black leading-tight">
+                Welcome
+                <br />
+                back.
+              </h1>
+
+              <p className="mt-5 max-w-md text-sm leading-7 text-[#aebdb4]">
+                Manage your bookings, schedules and Sportiva
+                membership from one account.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 sm:p-9 lg:p-11">
+            <div className="mb-8">
+              <div className="text-[9px] font-extrabold tracking-[1.7px] text-[#4d8763]">
+                MEMBER LOGIN
+              </div>
+
+              <h2 className="mt-2 text-3xl font-black tracking-tight">
+                Sign in
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-[#718078]">
+                Enter your account details to continue.
+              </p>
+            </div>
+
+            {successMessage && (
+              <div className="mb-5 rounded-xl border border-[#cbe5d2] bg-[#f1faf4] px-4 py-3 text-xs font-semibold leading-5 text-[#28734a]">
+                {successMessage}
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="mb-5 rounded-xl border border-[#f0cccc] bg-[#fff5f5] px-4 py-3 text-xs font-semibold leading-5 text-[#a04444]">
+                {errorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="mb-2 block text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                  EMAIL ADDRESS
                 </label>
 
-                <Link
-                  to="/reset-password"
-                  className="text-[10px] font-bold text-[#123B27] dark:text-[#B7E600]"
-                >
-                  Forgot password?
-                </Link>
+                <div className="relative">
+                  <Mail
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setErrorMessage("");
+                    }}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-3 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+                </div>
               </div>
 
-              <div className="relative">
-                <LockKeyhole
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
-                />
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                    PASSWORD
+                  </label>
 
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) =>
-                    setPassword(e.target.value)
-                  }
-                  placeholder="Your password"
-                  autoComplete="current-password"
-                  className="
-                    h-12 w-full rounded-xl
-                    border border-black/[0.08]
-                    bg-white
-                    pl-11 pr-12
-                    text-sm outline-none
-                    focus:border-[#123B27]/30
-                    focus:ring-2 focus:ring-[#123B27]/10
-                    dark:border-white/[0.08]
-                    dark:bg-white/[0.035]
-                    dark:focus:border-[#B7E600]/30
-                    dark:focus:ring-[#B7E600]/10
-                  "
-                />
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="text-[10px] font-extrabold text-[#28734a] hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowPassword((value) => !value)
-                  }
-                  aria-label={
-                    showPassword
-                      ? "Hide password"
-                      : "Show password"
-                  }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-black/35 dark:text-white/30"
-                >
-                  {showPassword ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
-                </button>
+                <div className="relative">
+                  <LockKeyhole
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setErrorMessage("");
+                    }}
+                    placeholder="Your password"
+                    autoComplete="current-password"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-11 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword((current) => !current)
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#77847c]"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={16} />
+                    ) : (
+                      <Eye size={16} />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="
-                mt-2 flex h-12 w-full
-                items-center justify-center gap-2
-                rounded-xl
-                bg-[#123B27]
-                text-xs font-black uppercase
-                tracking-[0.1em]
-                text-white
-                transition
-                hover:bg-[#174b31]
-                disabled:cursor-not-allowed
-                disabled:opacity-60
-                dark:bg-[#B7E600]
-                dark:text-[#102818]
-                dark:hover:bg-[#C5F20A]
-              "
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Signing in
-                </>
-              ) : (
-                <>
-                  Log in
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {needsVerification && (
-            <div
-              className="
-                mt-5 rounded-2xl
-                border border-amber-500/15
-                bg-amber-500/[0.05]
-                p-4
-              "
-            >
-              <p className="text-sm font-bold">
-                Email verification required
-              </p>
-
-              <p className="mt-1 text-xs leading-5 text-black/45 dark:text-white/40">
-                Check your inbox for the Sportiva verification
-                email. If you didn't receive it, you can send
-                another one.
-              </p>
 
               <button
-                type="button"
-                onClick={handleResendVerification}
-                disabled={resending}
-                className="
-                  mt-4 inline-flex items-center gap-2
-                  text-xs font-black uppercase
-                  tracking-[0.1em]
-                  text-[#123B27]
-                  disabled:opacity-50
-                  dark:text-[#B7E600]
-                "
+                type="submit"
+                disabled={loading}
+                className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-[#176b3a] text-sm font-extrabold text-white transition hover:bg-[#12582f] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {resending && (
-                  <Loader2
-                    size={14}
-                    className="animate-spin"
-                  />
-                )}
-
-                {resending
-                  ? "Sending..."
-                  : "Resend verification email"}
+                {loading ? "Signing in..." : "Sign in"}
               </button>
-            </div>
-          )}
+            </form>
 
-          <p className="mt-7 text-center text-sm text-black/40 dark:text-white/35">
-            Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="font-bold text-[#123B27] dark:text-[#B7E600]"
-            >
-              Create one
-            </Link>
-          </p>
-        </section>
-      </main>
+            <div className="mt-6 text-center text-sm text-[#718078]">
+              Don't have an account?{" "}
+              <Link
+                to="/register"
+                className="font-extrabold text-[#28734a] hover:underline"
+              >
+                Create one
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  )
+  );
 }
 
-export default Login
+export default Login;

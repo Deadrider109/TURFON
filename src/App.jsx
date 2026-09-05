@@ -1,9 +1,17 @@
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
-  Routes,
-  Route,
   Navigate,
+  Route,
+  Routes,
   useLocation,
 } from "react-router-dom";
 
@@ -19,7 +27,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminLogin from "./pages/AdminLogin";
 import Admin from "./pages/Admin";
 
-function LoadingScreen({ text = "Loading SPORTIVA..." }) {
+function LoadingScreen({ message = "Loading..." }) {
   return (
     <div
       style={{
@@ -27,61 +35,87 @@ function LoadingScreen({ text = "Loading SPORTIVA..." }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#07090d",
-        color: "#00ffa3",
-        fontFamily: "Arial, sans-serif",
-        fontSize: "14px",
+        background: "#f4f7f5",
+        color: "#176b3a",
+        fontFamily: "Inter, Arial, sans-serif",
       }}
     >
-      {text}
+      <div style={{ textAlign: "center" }}>
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            margin: "0 auto 14px",
+            borderRadius: 12,
+            border: "3px solid #dce9df",
+            borderTopColor: "#176b3a",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+
+        <strong
+          style={{
+            display: "block",
+            color: "#173022",
+            fontSize: 13,
+            letterSpacing: 1.5,
+          }}
+        >
+          THE SPORTIVA
+        </strong>
+
+        <span
+          style={{
+            display: "block",
+            marginTop: 5,
+            color: "#7d8982",
+            fontSize: 10,
+          }}
+        >
+          {message}
+        </span>
+      </div>
+
+      <style>
+        {`
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}
+      </style>
     </div>
   );
 }
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute() {
   const location = useLocation();
   const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState(false);
+  const [session, setSession] = useState(null);
 
   useEffect(() => {
     let mounted = true;
 
     const checkSession = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
 
-        if (!mounted) return;
+      if (!mounted) return;
 
-        const valid =
-          !!session?.user && !!session.user.email_confirmed_at;
-
-        setAllowed(valid);
-        setLoading(false);
-
-        if (session?.user && !session.user.email_confirmed_at) {
-          await supabase.auth.signOut();
-        }
-      } catch {
-        if (mounted) {
-          setAllowed(false);
-          setLoading(false);
-        }
-      }
+      setSession(currentSession);
+      setLoading(false);
     };
 
     checkSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (!mounted) return;
 
-      const valid =
-        !!session?.user && !!session.user.email_confirmed_at;
-
-      setAllowed(valid);
+      setSession(currentSession);
       setLoading(false);
     });
 
@@ -92,60 +126,60 @@ function ProtectedRoute({ children }) {
   }, []);
 
   if (loading) {
-    return <LoadingScreen />;
+    return <LoadingScreen message="Checking session..." />;
   }
 
-  if (!allowed) {
+  if (!session?.user) {
     return (
       <Navigate
         to="/login"
         replace
-        state={{ from: location }}
+        state={{ from: location.pathname }}
       />
     );
   }
 
-  return children;
+  return <Outlet />;
 }
 
-function AdminRoute({ children }) {
+function AdminRoute() {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    const checkAdmin = async () => {
+    const verifyAdmin = async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
-        if (!user || !user.email_confirmed_at) {
-          if (user && !user.email_confirmed_at) {
-            await supabase.auth.signOut();
-          }
-
+        if (!user) {
           if (mounted) {
             setAllowed(false);
             setLoading(false);
           }
-
           return;
         }
 
-        const { data, error } = await supabase
+        const { data: adminRecord, error } = await supabase
           .from("admin_users")
           .select("user_id")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (mounted) {
-          setAllowed(!error && !!data);
-          setLoading(false);
+        if (error) {
+          console.error("Admin verification error:", error);
         }
+
+        if (!mounted) return;
+
+        setAllowed(Boolean(adminRecord));
+        setLoading(false);
       } catch (error) {
-        console.error("Admin authentication error:", error);
+        console.error("Admin verification failed:", error);
 
         if (mounted) {
           setAllowed(false);
@@ -154,12 +188,12 @@ function AdminRoute({ children }) {
       }
     };
 
-    checkAdmin();
+    verifyAdmin();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      checkAdmin();
+      verifyAdmin();
     });
 
     return () => {
@@ -169,81 +203,43 @@ function AdminRoute({ children }) {
   }, []);
 
   if (loading) {
-    return <LoadingScreen text="Verifying admin access..." />;
+    return <LoadingScreen message="Verifying admin access..." />;
   }
 
   if (!allowed) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
   }
 
-  return children;
+  return <Outlet />;
 }
 
-function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/book"
-        element={
-          <ProtectedRoute>
-            <Book />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/bookings"
-        element={
-          <ProtectedRoute>
-            <Bookings />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route path="/admin/login" element={<AdminLogin />} />
-
-      <Route
-        path="/admin"
-        element={
-          <AdminRoute>
-            <Admin />
-          </AdminRoute>
-        }
-      />
-
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
-  );
-}
-
-export default function App() {
+function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/book" element={<Book />} />
+          <Route path="/bookings" element={<Bookings />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
+
+        <Route path="/admin/login" element={<AdminLogin />} />
+
+        <Route element={<AdminRoute />}>
+          <Route path="/admin" element={<Admin />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }
+
+export default App;

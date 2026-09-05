@@ -1,497 +1,389 @@
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import {
-  ArrowRight,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Loader2,
-  LockKeyhole,
-  Mail,
-  Phone,
-  UserRound,
-} from "lucide-react"
-
-import { supabase } from "../supabase"
-import ThemeToggle from "../components/ThemeToggle"
+import { useState } from "react";
+import { Eye, EyeOff, LockKeyhole, Mail, Phone, UserRound } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 
 function Register() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const [fullName, setFullName] = useState("")
-  const [phone, setPhone] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [form, setForm] = useState({
+    fullName: "",
+    phone: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  async function handleRegister(event) {
-    event.preventDefault()
+  const updateField = (field, value) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setErrorMessage("");
+  };
 
-    setError("")
+  const handleRegister = async (event) => {
+    event.preventDefault();
+    setErrorMessage("");
 
-    const cleanName = fullName.trim()
-    const cleanPhone = phone.trim()
-    const cleanEmail = email.trim().toLowerCase()
+    const fullName = form.fullName.trim();
+    const phone = form.phone.trim();
+    const email = form.email.trim().toLowerCase();
+    const password = form.password;
+    const confirmPassword = form.confirmPassword;
 
-    if (!cleanName || !cleanPhone || !cleanEmail || !password) {
-      setError("Please complete all required fields.")
-      return
+    if (!fullName || !phone || !email || !password || !confirmPassword) {
+      setErrorMessage("Please complete all fields.");
+      return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.")
-      return
+    if (password.length < 8) {
+      setErrorMessage("Password must contain at least 8 characters.");
+      return;
     }
 
-    setLoading(true)
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
 
     try {
-      const { data, error: signupError } =
-        await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/login?verified=1`,
-            data: {
-              full_name: cleanName,
-              phone: cleanPhone,
-            },
-          },
-        })
+      setLoading(true);
 
-      if (signupError) {
-        throw signupError
+      /*
+       * With Supabase Email Confirmation OFF, this returns an active
+       * session immediately.
+       *
+       * Supabase Auth keeps email addresses unique, so the same email
+       * cannot be used to create another account.
+       */
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone,
+          },
+        },
+      });
+
+      if (error) {
+        const message = String(error.message || "").toLowerCase();
+
+        if (
+          message.includes("already registered") ||
+          message.includes("already exists") ||
+          message.includes("user already exists") ||
+          message.includes("duplicate")
+        ) {
+          throw new Error(
+            "An account with this email already exists. Please log in instead."
+          );
+        }
+
+        throw error;
       }
 
       /*
-       * If Supabase returns a session here, email confirmation
-       * is probably disabled in the Supabase project.
-       *
-       * When confirmation is enabled, session should normally
-       * be null until the user verifies their email.
+       * Confirmation is OFF, so a brand-new user should normally
+       * receive a session immediately.
        */
-      if (data?.session) {
-        const user = data.session.user
+      const user = data?.user;
+      const session = data?.session;
 
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert(
-            {
-              id: user.id,
-              full_name: cleanName,
-              phone: cleanPhone,
-              email: cleanEmail,
-            },
-            {
-              onConflict: "id",
-            }
-          )
-
-        if (profileError) {
-          console.error("Profile creation error:", profileError)
-        }
-
-        navigate("/dashboard", { replace: true })
-        return
+      if (!user) {
+        throw new Error("Registration could not be completed.");
       }
 
-      setSuccess(true)
-    } catch (err) {
-      console.error("Registration error:", err)
+      /*
+       * Create/update the public profile using the Auth user's UUID.
+       * Upsert prevents duplicate profile rows for the same user ID.
+       */
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            full_name: fullName,
+            phone,
+            email,
+          },
+          {
+            onConflict: "id",
+          }
+        );
 
-      const message = String(err?.message || "")
-
-      if (message.toLowerCase().includes("already registered")) {
-        setError(
-          "An account with this email already exists. Please log in instead."
-        )
-      } else {
-        setError(
-          message || "We couldn't create your account. Please try again."
-        )
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
       }
+
+      if (session) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+
+      /*
+       * This should only happen if Supabase is still configured
+       * to require confirmation.
+       */
+      navigate("/login", {
+        replace: true,
+        state: {
+          registered: true,
+          email,
+        },
+      });
+    } catch (error) {
+      console.error("Registration error:", error);
+
+      setErrorMessage(
+        error.message || "Unable to create your account."
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  if (success) {
-    return (
-      <div
-        className="
-          min-h-screen
-          bg-[#F6F7F3]
-          text-[#123B27]
-          dark:bg-[#0B110E]
-          dark:text-white
-        "
-      >
-        <header
-          className="
-            flex h-[72px] items-center justify-between
-            border-b border-black/[0.06]
-            px-4
-            dark:border-white/[0.06]
-          "
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#123B27] text-[#B7E600]">
-              <span className="text-xs font-black italic">S</span>
-            </div>
-
-            <span className="text-sm font-black tracking-[0.16em]">
-              SPORTIVA
-            </span>
-          </div>
-
-          <ThemeToggle />
-        </header>
-
-        <main className="flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-10">
-          <div className="w-full max-w-md text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Mail size={28} />
-            </div>
-
-            <p className="mt-7 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35 dark:text-white/25">
-              Almost there
-            </p>
-
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">
-              Verify your email
-            </h1>
-
-            <p className="mt-3 text-sm leading-6 text-black/45 dark:text-white/40">
-              We've sent a verification link to
-            </p>
-
-            <p className="mt-1 break-all text-sm font-bold">
-              {email.trim().toLowerCase()}
-            </p>
-
-            <div
-              className="
-                mt-7 rounded-2xl
-                border border-black/[0.07]
-                bg-white
-                p-5 text-left
-                dark:border-white/[0.07]
-                dark:bg-white/[0.04]
-              "
-            >
-              <div className="flex gap-3">
-                <CheckCircle2
-                  size={18}
-                  className="mt-0.5 shrink-0 text-[#123B27] dark:text-[#B7E600]"
-                />
-
-                <div>
-                  <p className="text-sm font-bold">
-                    Check your inbox
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-black/40 dark:text-white/35">
-                    Click the verification link in the email.
-                    After verification, you'll be able to log in
-                    to Sportiva.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <Link
-              to="/login"
-              className="
-                mt-6 inline-flex items-center gap-2
-                text-xs font-black uppercase
-                tracking-[0.12em]
-                text-[#123B27]
-                dark:text-[#B7E600]
-              "
-            >
-              Go to login
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-        </main>
-      </div>
-    )
-  }
+  };
 
   return (
-    <div
-      className="
-        min-h-screen
-        bg-[#F6F7F3]
-        text-[#123B27]
-        dark:bg-[#0B110E]
-        dark:text-white
-      "
-    >
-      <header
-        className="
-          flex h-[72px] items-center justify-between
-          border-b border-black/[0.06]
-          px-4 sm:px-6
-          dark:border-white/[0.06]
-        "
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#123B27] text-[#B7E600]">
-            <span className="text-xs font-black italic">S</span>
+    <div className="min-h-screen bg-[#f4f7f5] px-4 py-8 text-[#17221d]">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
+        <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-[#dfe9e2] bg-white shadow-[0_24px_80px_rgba(16,37,27,0.08)] lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="hidden bg-[#10251b] p-10 text-white lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <div className="text-2xl font-black tracking-[1px]">
+                SPORT<span className="text-[#55a96f]">IVA</span>
+              </div>
+
+              <div className="mt-2 text-[9px] font-extrabold tracking-[2px] text-[#81958a]">
+                ART OF ACTIVE LIVING
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3 text-[9px] font-extrabold tracking-[1.8px] text-[#55a96f]">
+                JOIN THE SPORTIVA
+              </div>
+
+              <h1 className="max-w-sm text-4xl font-black leading-tight">
+                Your game.
+                <br />
+                Your time.
+                <br />
+                Your turf.
+              </h1>
+
+              <p className="mt-5 max-w-md text-sm leading-7 text-[#aebdb4]">
+                Create your Sportiva account and book your preferred
+                turf schedule in a few simple steps.
+              </p>
+            </div>
           </div>
 
-          <span className="text-sm font-black tracking-[0.16em]">
-            SPORTIVA
-          </span>
+          <div className="p-6 sm:p-9 lg:p-11">
+            <div className="mb-8">
+              <div className="text-[9px] font-extrabold tracking-[1.7px] text-[#4d8763]">
+                CREATE ACCOUNT
+              </div>
+
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-[#17221d]">
+                Welcome to Sportiva
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-[#718078]">
+                Register once and manage all your turf bookings
+                from your account.
+              </p>
+            </div>
+
+            {errorMessage && (
+              <div className="mb-5 rounded-xl border border-[#f0cccc] bg-[#fff5f5] px-4 py-3 text-xs font-semibold leading-5 text-[#a04444]">
+                {errorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="mb-2 block text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                  FULL NAME
+                </label>
+
+                <div className="relative">
+                  <UserRound
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type="text"
+                    value={form.fullName}
+                    onChange={(e) =>
+                      updateField("fullName", e.target.value)
+                    }
+                    placeholder="Your full name"
+                    autoComplete="name"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-3 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                  PHONE NUMBER
+                </label>
+
+                <div className="relative">
+                  <Phone
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) =>
+                      updateField("phone", e.target.value)
+                    }
+                    placeholder="01XXXXXXXXX"
+                    autoComplete="tel"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-3 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                  EMAIL ADDRESS
+                </label>
+
+                <div className="relative">
+                  <Mail
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) =>
+                      updateField("email", e.target.value)
+                    }
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-3 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                  PASSWORD
+                </label>
+
+                <div className="relative">
+                  <LockKeyhole
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) =>
+                      updateField("password", e.target.value)
+                    }
+                    placeholder="At least 8 characters"
+                    autoComplete="new-password"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-11 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword((current) => !current)
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#77847c]"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={16} />
+                    ) : (
+                      <Eye size={16} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-extrabold tracking-[0.6px] text-[#68776f]">
+                  CONFIRM PASSWORD
+                </label>
+
+                <div className="relative">
+                  <LockKeyhole
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b9891]"
+                  />
+
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={form.confirmPassword}
+                    onChange={(e) =>
+                      updateField(
+                        "confirmPassword",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Repeat your password"
+                    autoComplete="new-password"
+                    className="h-11 w-full rounded-xl border border-[#dce4df] bg-white pl-10 pr-11 text-sm outline-none transition focus:border-[#2d8151] focus:ring-4 focus:ring-[#2d8151]/10"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowConfirmPassword(
+                        (current) => !current
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#77847c]"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={16} />
+                    ) : (
+                      <Eye size={16} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-[#176b3a] text-sm font-extrabold text-white transition hover:bg-[#12582f] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Creating account..." : "Create account"}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center text-sm text-[#718078]">
+              Already have an account?{" "}
+              <Link
+                to="/login"
+                className="font-extrabold text-[#28734a] hover:underline"
+              >
+                Log in
+              </Link>
+            </div>
+          </div>
         </div>
-
-        <ThemeToggle />
-      </header>
-
-      <main className="mx-auto flex min-h-[calc(100vh-72px)] max-w-md items-center px-4 py-10">
-        <section className="w-full">
-          <div className="mb-7">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35 dark:text-white/25">
-              Join Sportiva
-            </p>
-
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">
-              Create your account
-            </h1>
-
-            <p className="mt-2 text-sm text-black/45 dark:text-white/40">
-              Book your next session at Sportiva.
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-5 rounded-xl border border-red-500/15 bg-red-500/[0.06] px-4 py-3 text-sm text-red-600 dark:text-red-400">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div>
-              <label
-                htmlFor="fullName"
-                className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-black/40 dark:text-white/35"
-              >
-                Full name
-              </label>
-
-              <div className="relative">
-                <UserRound
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
-                />
-
-                <input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your full name"
-                  autoComplete="name"
-                  className="
-                    h-12 w-full rounded-xl
-                    border border-black/[0.08]
-                    bg-white
-                    pl-11 pr-4
-                    text-sm outline-none
-                    focus:border-[#123B27]/30
-                    focus:ring-2 focus:ring-[#123B27]/10
-                    dark:border-white/[0.08]
-                    dark:bg-white/[0.035]
-                    dark:focus:border-[#B7E600]/30
-                    dark:focus:ring-[#B7E600]/10
-                  "
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="phone"
-                className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-black/40 dark:text-white/35"
-              >
-                Phone number
-              </label>
-
-              <div className="relative">
-                <Phone
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
-                />
-
-                <input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Your phone number"
-                  autoComplete="tel"
-                  className="
-                    h-12 w-full rounded-xl
-                    border border-black/[0.08]
-                    bg-white
-                    pl-11 pr-4
-                    text-sm outline-none
-                    focus:border-[#123B27]/30
-                    focus:ring-2 focus:ring-[#123B27]/10
-                    dark:border-white/[0.08]
-                    dark:bg-white/[0.035]
-                    dark:focus:border-[#B7E600]/30
-                    dark:focus:ring-[#B7E600]/10
-                  "
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="email"
-                className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-black/40 dark:text-white/35"
-              >
-                Email address
-              </label>
-
-              <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
-                />
-
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  className="
-                    h-12 w-full rounded-xl
-                    border border-black/[0.08]
-                    bg-white
-                    pl-11 pr-4
-                    text-sm outline-none
-                    focus:border-[#123B27]/30
-                    focus:ring-2 focus:ring-[#123B27]/10
-                    dark:border-white/[0.08]
-                    dark:bg-white/[0.035]
-                    dark:focus:border-[#B7E600]/30
-                    dark:focus:ring-[#B7E600]/10
-                  "
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-black/40 dark:text-white/35"
-              >
-                Password
-              </label>
-
-              <div className="relative">
-                <LockKeyhole
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
-                />
-
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  autoComplete="new-password"
-                  className="
-                    h-12 w-full rounded-xl
-                    border border-black/[0.08]
-                    bg-white
-                    pl-11 pr-12
-                    text-sm outline-none
-                    focus:border-[#123B27]/30
-                    focus:ring-2 focus:ring-[#123B27]/10
-                    dark:border-white/[0.08]
-                    dark:bg-white/[0.035]
-                    dark:focus:border-[#B7E600]/30
-                    dark:focus:ring-[#B7E600]/10
-                  "
-                />
-
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  aria-label={
-                    showPassword
-                      ? "Hide password"
-                      : "Show password"
-                  }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-black/35 dark:text-white/30"
-                >
-                  {showPassword ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="
-                mt-2 flex h-12 w-full
-                items-center justify-center gap-2
-                rounded-xl
-                bg-[#123B27]
-                text-xs font-black uppercase
-                tracking-[0.1em]
-                text-white
-                transition
-                hover:bg-[#174b31]
-                disabled:cursor-not-allowed
-                disabled:opacity-60
-                dark:bg-[#B7E600]
-                dark:text-[#102818]
-                dark:hover:bg-[#C5F20A]
-              "
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Creating account
-                </>
-              ) : (
-                <>
-                  Create account
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          <p className="mt-7 text-center text-sm text-black/40 dark:text-white/35">
-            Already have an account?{" "}
-            <Link
-              to="/login"
-              className="font-bold text-[#123B27] dark:text-[#B7E600]"
-            >
-              Log in
-            </Link>
-          </p>
-        </section>
-      </main>
+      </div>
     </div>
-  )
+  );
 }
 
-export default Register
+export default Register;
