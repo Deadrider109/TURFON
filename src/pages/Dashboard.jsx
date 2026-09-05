@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
+  Award,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -287,7 +288,6 @@ function Dashboard() {
 
   const nextBooking = upcomingBookings[0] || null
 
-  // Use the complete name instead of extracting only the first name.
   const displayName =
     profile?.full_name?.trim() || "Player"
 
@@ -415,7 +415,7 @@ function Dashboard() {
                   <div
                     className="
                       absolute right-0 top-14 z-50
-                      w-56 rounded-2xl
+                      w-60 rounded-2xl
                       border border-black/[0.08]
                       bg-white p-2
                       shadow-[0_20px_60px_rgba(0,0,0,0.14)]
@@ -429,6 +429,15 @@ function Dashboard() {
                       onClick={() => {
                         setMenuOpen(false)
                         navigate("/bookings")
+                      }}
+                    />
+
+                    <MenuItem
+                      icon={Award}
+                      label="Rewards & Progress"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        navigate("/rewards")
                       }}
                     />
 

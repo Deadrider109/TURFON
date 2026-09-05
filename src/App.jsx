@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import Book from "./pages/Book";
 import Bookings from "./pages/Bookings";
 import Profile from "./pages/Profile";
+import Rewards from "./pages/Rewards";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
@@ -81,10 +82,6 @@ function LoadingScreen({ message = "Loading..." }) {
     </div>
   );
 }
-
-/* =========================================================
-   USER PROTECTED ROUTES
-   ========================================================= */
 
 function ProtectedRoute() {
   const location = useLocation();
@@ -155,60 +152,14 @@ function ProtectedRoute() {
   return <Outlet />;
 }
 
-/* =========================================================
-   ADMIN PROTECTED ROUTES
-   ========================================================= */
-
 function AdminRoute() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  const verifyAdmin = async () => {
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        setAllowed(false);
-        return;
-      }
-
-      const { data: adminRecord, error: adminError } =
-        await supabase
-          .from("admin_users")
-          .select("user_id")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-      if (adminError) {
-        console.error(
-          "Admin verification error:",
-          adminError
-        );
-
-        setAllowed(false);
-        return;
-      }
-
-      setAllowed(Boolean(adminRecord));
-    } catch (error) {
-      console.error(
-        "Admin verification failed:",
-        error
-      );
-
-      setAllowed(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     let mounted = true;
 
-    const runVerification = async () => {
+    const verifyAdmin = async () => {
       try {
         const {
           data: { user },
@@ -258,12 +209,12 @@ function AdminRoute() {
       }
     };
 
-    runVerification();
+    verifyAdmin();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      runVerification();
+      verifyAdmin();
     });
 
     return () => {
@@ -285,15 +236,10 @@ function AdminRoute() {
   return <Outlet />;
 }
 
-/* =========================================================
-   APP
-   ========================================================= */
-
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
         <Route
           path="/"
           element={<Navigate to="/dashboard" replace />}
@@ -313,7 +259,6 @@ function App() {
           element={<AdminLogin />}
         />
 
-        {/* User protected routes */}
         <Route element={<ProtectedRoute />}>
           <Route
             path="/dashboard"
@@ -334,9 +279,13 @@ function App() {
             path="/profile"
             element={<Profile />}
           />
+
+          <Route
+            path="/rewards"
+            element={<Rewards />}
+          />
         </Route>
 
-        {/* Admin protected routes */}
         <Route element={<AdminRoute />}>
           <Route
             path="/admin"
@@ -344,7 +293,6 @@ function App() {
           />
         </Route>
 
-        {/* Fallback */}
         <Route
           path="*"
           element={<Navigate to="/dashboard" replace />}
