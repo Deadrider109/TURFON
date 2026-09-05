@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
-import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
 import {
   ArrowLeft,
   Award,
   Check,
-  CheckCircle2,
-  Clock3,
   Gift,
+  History,
   RefreshCw,
-  Sparkles,
   Star,
   Trophy,
   Zap,
@@ -17,143 +14,52 @@ import {
 
 import { supabase } from "../lib/supabase"
 
-function AnimatedNumber({ value, duration = 1.2 }) {
+function AnimatedNumber({ value, duration = 900 }) {
   const [display, setDisplay] = useState(0)
 
   useEffect(() => {
     const target = Number(value || 0)
-    const start = performance.now()
 
-    let frame
+    if (!Number.isFinite(target)) {
+      setDisplay(0)
+      return
+    }
 
-    const animate = (time) => {
-      const elapsed = time - start
-      const progress = Math.min(elapsed / (duration * 1000), 1)
+    const startValue = 0
+    const startTime = performance.now()
+    let frameId
 
-      const eased =
-        1 - Math.pow(1 - progress, 3)
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
 
-      setDisplay(Math.round(target * eased))
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const currentValue =
+        startValue + (target - startValue) * eased
+
+      setDisplay(Math.round(currentValue))
 
       if (progress < 1) {
-        frame = requestAnimationFrame(animate)
+        frameId = requestAnimationFrame(animate)
       }
     }
 
-    frame = requestAnimationFrame(animate)
+    frameId = requestAnimationFrame(animate)
 
-    return () => cancelAnimationFrame(frame)
+    return () => cancelAnimationFrame(frameId)
   }, [value, duration])
 
-  return display.toLocaleString()
+  return display.toLocaleString("en-BD")
 }
 
-function ParticleField() {
-  const particles = useMemo(
-    () =>
-      Array.from({ length: 32 }, (_, index) => ({
-        id: index,
-        left: Math.random() * 100,
-        top: Math.random() * 100,
-        size: Math.random() * 3 + 1,
-        duration: Math.random() * 5 + 4,
-        delay: Math.random() * 3,
-      })),
-    []
-  )
+function formatActivityDate(value) {
+  if (!value) return "—"
 
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {particles.map((particle) => (
-        <motion.span
-          key={particle.id}
-          className="absolute rounded-full bg-[#B7E600]"
-          style={{
-            left: `${particle.left}%`,
-            top: `${particle.top}%`,
-            width: particle.size,
-            height: particle.size,
-            opacity: 0.12,
-          }}
-          animate={{
-            y: [0, -25, 0],
-            x: [0, 8, -6, 0],
-            opacity: [0.08, 0.28, 0.08],
-            scale: [1, 1.5, 1],
-          }}
-          transition={{
-            duration: particle.duration,
-            delay: particle.delay,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-    </div>
-  )
-}
-
-function ProgressRing({ progress }) {
-  const radius = 68
-  const circumference = 2 * Math.PI * radius
-  const offset =
-    circumference -
-    (progress / 100) * circumference
-
-  return (
-    <div className="relative flex h-44 w-44 items-center justify-center">
-      <svg
-        width="176"
-        height="176"
-        viewBox="0 0 176 176"
-        className="-rotate-90"
-      >
-        <circle
-          cx="88"
-          cy="88"
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="8"
-        />
-
-        <motion.circle
-          cx="88"
-          cy="88"
-          r={radius}
-          fill="none"
-          stroke="#B7E600"
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{
-            strokeDashoffset: circumference,
-          }}
-          animate={{
-            strokeDashoffset: offset,
-          }}
-          transition={{
-            duration: 1.5,
-            ease: "easeOut",
-          }}
-          style={{
-            filter:
-              "drop-shadow(0 0 9px rgba(183,230,0,0.55))",
-          }}
-        />
-      </svg>
-
-      <div className="absolute text-center">
-        <p className="text-4xl font-black text-white">
-          <AnimatedNumber value={progress} />%
-        </p>
-
-        <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.2em] text-white/40">
-          Progress
-        </p>
-      </div>
-    </div>
-  )
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
 }
 
 function Rewards() {
@@ -207,7 +113,7 @@ function Rewards() {
           .order("created_at", {
             ascending: false,
           })
-          .limit(10),
+          .limit(12),
 
         supabase
           .from("community_offers")
@@ -219,10 +125,7 @@ function Rewards() {
       ])
 
       if (rewardResult.error) {
-        console.error(
-          "Reward data error:",
-          rewardResult.error
-        )
+        console.error("Reward data error:", rewardResult.error)
       }
 
       if (checkpointsResult.error) {
@@ -240,10 +143,7 @@ function Rewards() {
       }
 
       if (offersResult.error) {
-        console.error(
-          "Offers error:",
-          offersResult.error
-        )
+        console.error("Offers error:", offersResult.error)
       }
 
       let reward = rewardResult.data
@@ -254,15 +154,10 @@ function Rewards() {
 
       setRewardData(reward || null)
       setCheckpoints(checkpointsResult.data || [])
-      setTransactions(
-        transactionsResult.data || []
-      )
+      setTransactions(transactionsResult.data || [])
       setOffers(offersResult.data || [])
     } catch (error) {
-      console.error(
-        "Rewards page error:",
-        error
-      )
+      console.error("Rewards page error:", error)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -273,9 +168,7 @@ function Rewards() {
     loadRewards()
   }, [])
 
-  const points = Number(
-    rewardData?.points || 0
-  )
+  const points = Number(rewardData?.points || 0)
 
   const lifetimePoints = Number(
     rewardData?.lifetime_points || 0
@@ -285,91 +178,73 @@ function Rewards() {
     return (
       checkpoints.find(
         (checkpoint) =>
-          Number(
-            checkpoint.points_required
-          ) > points
+          Number(checkpoint.points_required || 0) > points
       ) || null
     )
   }, [checkpoints, points])
 
-  const previousCheckpoint = useMemo(() => {
-    const reached = checkpoints.filter(
+  const reachedCheckpoints = useMemo(() => {
+    return checkpoints.filter(
       (checkpoint) =>
-        Number(
-          checkpoint.points_required
-        ) <= points
+        Number(checkpoint.points_required || 0) <= points
     )
-
-    return reached[reached.length - 1] || null
   }, [checkpoints, points])
 
-  const progress = useMemo(() => {
-    if (!nextCheckpoint) {
-      return 100
-    }
+  const currentCheckpoint =
+    reachedCheckpoints[reachedCheckpoints.length - 1] || null
 
-    const currentRequired =
-      previousCheckpoint
-        ? Number(
-            previousCheckpoint.points_required
-          )
-        : 0
+  const progress = useMemo(() => {
+    if (!nextCheckpoint) return 100
+
+    const currentRequired = currentCheckpoint
+      ? Number(currentCheckpoint.points_required || 0)
+      : 0
 
     const nextRequired = Number(
-      nextCheckpoint.points_required
+      nextCheckpoint.points_required || 0
     )
 
-    const range =
-      nextRequired - currentRequired
+    const range = nextRequired - currentRequired
 
-    if (range <= 0) {
-      return 100
-    }
-
-    const current =
-      ((points - currentRequired) / range) *
-      100
+    if (range <= 0) return 100
 
     return Math.max(
       0,
-      Math.min(100, current)
+      Math.min(
+        100,
+        ((points - currentRequired) / range) * 100
+      )
     )
-  }, [
-    nextCheckpoint,
-    points,
-    previousCheckpoint,
-  ])
+  }, [currentCheckpoint, nextCheckpoint, points])
 
   const pointsToNext = nextCheckpoint
     ? Math.max(
         0,
-        Number(
-          nextCheckpoint.points_required
-        ) - points
+        Number(nextCheckpoint.points_required || 0) - points
       )
     : 0
 
-  const status =
+  const currentStatus =
     rewardData?.title ||
-    previousCheckpoint?.title ||
+    currentCheckpoint?.title ||
     "Starter"
 
-  const statusDescription =
+  const currentDescription =
     rewardData?.description ||
-    previousCheckpoint?.description ||
-    "Keep playing and earning points to unlock the next Sportiva milestone."
+    currentCheckpoint?.description ||
+    "Keep playing and earning points to unlock more Sportiva benefits."
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#07100C] text-white">
+      <div className="flex min-h-screen items-center justify-center bg-[#F6F7F3] text-[#123B27] dark:bg-[#0B110E] dark:text-white">
         <div className="flex items-center gap-3">
           <RefreshCw
             size={18}
-            className="animate-spin text-[#B7E600]"
+            className="animate-spin text-[#28734A]"
           />
 
-          <span className="text-sm font-semibold">
-            Initializing rewards...
+          <span className="text-sm font-medium">
+            Loading rewards...
           </span>
         </div>
       </div>
@@ -377,485 +252,442 @@ function Rewards() {
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[#07100C] text-white">
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute left-[-15%] top-[-10%] h-[420px] w-[420px] rounded-full bg-[#B7E600]/[0.06] blur-[120px]" />
-        <div className="absolute bottom-[-15%] right-[-10%] h-[500px] w-[500px] rounded-full bg-[#176B3A]/[0.14] blur-[130px]" />
-
-        <div
-          className="absolute inset-0 opacity-[0.035]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-          }}
-        />
-      </div>
-
-      <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-[#07100C]/85 backdrop-blur-2xl">
+    <div className="min-h-screen bg-[#F6F7F3] text-[#123B27] dark:bg-[#0B110E] dark:text-white">
+      <header className="sticky top-0 z-40 border-b border-black/[0.06] bg-[#F6F7F3]/95 backdrop-blur-xl dark:border-white/[0.06] dark:bg-[#0B110E]/95">
         <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <motion.button
+          <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            whileHover={{ x: -3 }}
-            whileTap={{ scale: 0.96 }}
-            className="group flex items-center gap-2 text-sm font-semibold text-white/55 transition hover:text-white"
+            className="group flex items-center gap-2 text-sm font-semibold text-black/55 transition hover:text-[#123B27] dark:text-white/55 dark:hover:text-white"
           >
             <ArrowLeft
               size={17}
-              className="transition group-hover:text-[#B7E600]"
+              className="transition group-hover:-translate-x-0.5"
             />
 
-            Dashboard
-          </motion.button>
+            Back to Dashboard
+          </button>
 
-          <div className="flex items-center gap-2">
-            <motion.button
-              type="button"
-              onClick={() => loadRewards(true)}
-              disabled={refreshing}
-              whileHover={{ rotate: 25 }}
-              whileTap={{ scale: 0.92 }}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/65 transition hover:border-[#B7E600]/30 hover:text-[#B7E600] disabled:opacity-40"
-            >
-              <RefreshCw
-                size={16}
-                className={
-                  refreshing
-                    ? "animate-spin"
-                    : ""
-                }
-              />
-            </motion.button>
-          </div>
+          <button
+            type="button"
+            onClick={() => loadRewards(true)}
+            disabled={refreshing}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.07] bg-white text-[#123B27] shadow-sm transition hover:border-[#28734A]/20 hover:bg-[#F5F8F5] disabled:opacity-50 dark:border-white/[0.07] dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.07]"
+            aria-label="Refresh rewards"
+          >
+            <RefreshCw
+              size={16}
+              className={refreshing ? "animate-spin" : ""}
+            />
+          </button>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-4 py-7 sm:px-6 lg:px-8">
-        {/* Heading */}
+      <main className="mx-auto max-w-6xl px-4 py-7 sm:px-6 lg:px-8">
+        {/* Page heading */}
         <section className="mb-7">
           <div className="flex items-center gap-2">
-            <motion.div
-              animate={{
-                rotate: [0, 8, -8, 0],
-                scale: [1, 1.08, 1],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            >
-              <Sparkles
-                size={16}
-                className="text-[#B7E600]"
-              />
-            </motion.div>
+            <span className="h-1.5 w-1.5 rounded-full bg-[#28734A]" />
 
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#B7E600]/70">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#28734A] dark:text-[#B7E600]">
               SPORTIVA REWARDS
             </p>
           </div>
 
-          <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">
-            Level up your game.
+          <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+            Your member journey
           </h1>
 
-          <p className="mt-3 max-w-xl text-sm leading-6 text-white/40">
-            Every session moves you closer to the next
-            Sportiva reward.
+          <p className="mt-2 max-w-xl text-sm leading-6 text-black/45 dark:text-white/40">
+            Track your points, membership status and the rewards
+            you've unlocked through Sportiva.
           </p>
         </section>
 
-        {/* Hero */}
-        <motion.section
-          initial={{
-            opacity: 0,
-            y: 25,
-          }}
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
-          transition={{
-            duration: 0.7,
-          }}
-          className="relative overflow-hidden rounded-[28px] border border-[#B7E600]/10 bg-gradient-to-br from-[#123B27] via-[#0D291C] to-[#07100C] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.35)] sm:p-8"
-        >
-          <ParticleField />
+        {/* Main membership card */}
+        <section className="overflow-hidden rounded-[26px] border border-[#123B27]/10 bg-white shadow-[0_18px_60px_rgba(18,59,39,0.08)] dark:border-white/[0.07] dark:bg-white/[0.035]">
+          <div className="grid lg:grid-cols-[0.88fr_1.12fr]">
+            {/* Status section */}
+            <div className="relative overflow-hidden bg-[#123B27] p-6 text-white sm:p-8">
+              <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full border border-white/[0.08]" />
+              <div className="absolute -right-5 -top-5 h-26 w-26 rounded-full border border-[#B7E600]/10" />
 
-          <div className="absolute right-[-80px] top-[-80px] h-56 w-56 rounded-full border border-[#B7E600]/10" />
-          <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full border border-[#B7E600]/10" />
+              <div className="relative">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#B7E600]/15 bg-[#B7E600]/10">
+                    <Trophy
+                      size={22}
+                      className="text-[#B7E600]"
+                    />
+                  </div>
 
-          <div className="relative grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-            <div>
-              <div className="flex items-center gap-3">
-                <motion.div
-                  animate={{
-                    boxShadow: [
-                      "0 0 0 rgba(183,230,0,0)",
-                      "0 0 32px rgba(183,230,0,0.18)",
-                      "0 0 0 rgba(183,230,0,0)",
-                    ],
-                  }}
-                  transition={{
-                    duration: 2.5,
-                    repeat: Infinity,
-                  }}
-                  className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#B7E600]/20 bg-[#B7E600]/[0.08]"
-                >
-                  <Trophy
-                    size={25}
-                    className="text-[#B7E600]"
-                  />
-                </motion.div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">
+                      MEMBERSHIP STATUS
+                    </p>
 
-                <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/35">
-                    CURRENT STATUS
-                  </p>
-
-                  <h2 className="mt-1 text-2xl font-black">
-                    {status}
-                  </h2>
+                    <h2 className="mt-1 text-2xl font-black">
+                      {currentStatus}
+                    </h2>
+                  </div>
                 </div>
-              </div>
 
-              <p className="mt-6 max-w-md text-sm leading-6 text-white/50">
-                {statusDescription}
-              </p>
+                <p className="mt-6 max-w-sm text-sm leading-6 text-white/55">
+                  {currentDescription}
+                </p>
 
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <motion.div
-                  whileHover={{
-                    y: -3,
-                    borderColor:
-                      "rgba(183,230,0,0.25)",
-                  }}
-                  className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4"
-                >
-                  <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-white/30">
+                <div className="mt-7">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">
                     CURRENT POINTS
                   </p>
 
-                  <p className="mt-2 text-3xl font-black text-[#B7E600]">
-                    <AnimatedNumber
-                      value={points}
-                    />
-                  </p>
-                </motion.div>
+                  <div className="mt-1 flex items-end gap-2">
+                    <span className="text-5xl font-black tracking-[-0.05em] text-[#B7E600]">
+                      <AnimatedNumber value={points} />
+                    </span>
 
-                <motion.div
-                  whileHover={{
-                    y: -3,
-                    borderColor:
-                      "rgba(183,230,0,0.25)",
-                  }}
-                  className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4"
-                >
-                  <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-white/30">
-                    LIFETIME
-                  </p>
+                    <span className="mb-1 text-xs font-semibold text-white/35">
+                      points
+                    </span>
+                  </div>
+                </div>
 
-                  <p className="mt-2 text-3xl font-black">
-                    <AnimatedNumber
-                      value={lifetimePoints}
-                    />
-                  </p>
-                </motion.div>
+                <div className="mt-7 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.05] p-4">
+                    <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-white/30">
+                      LIFETIME
+                    </p>
+
+                    <p className="mt-2 text-xl font-black">
+                      <AnimatedNumber
+                        value={lifetimePoints}
+                      />
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.05] p-4">
+                    <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-white/30">
+                      NEXT TARGET
+                    </p>
+
+                    <p className="mt-2 text-xl font-black">
+                      {nextCheckpoint
+                        ? Number(
+                            nextCheckpoint.points_required
+                          ).toLocaleString()
+                        : "MAX"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-center">
-              <ProgressRing progress={progress} />
-
-              <div className="mt-2 text-center">
-                <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30">
-                  NEXT MILESTONE
-                </p>
-
-                <h3 className="mt-2 text-xl font-black">
-                  {nextCheckpoint?.title ||
-                    "Maximum level reached"}
-                </h3>
-
-                {nextCheckpoint ? (
-                  <p className="mt-2 text-xs text-white/40">
-                    {pointsToNext} points remaining
+            {/* Progress section */}
+            <div className="p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.17em] text-[#28734A] dark:text-[#B7E600]">
+                    PROGRESSION
                   </p>
-                ) : (
-                  <p className="mt-2 text-xs text-[#B7E600]/60">
-                    You reached every available milestone.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </motion.section>
 
-        {/* Stats */}
-        <section className="mt-5 grid gap-3 sm:grid-cols-3">
-          {[
-            {
-              icon: Star,
-              label: "Current points",
-              value: points,
-            },
-            {
-              icon: Zap,
-              label: "Lifetime points",
-              value: lifetimePoints,
-            },
-            {
-              icon: Award,
-              label: "Next target",
-              value: nextCheckpoint
-                ? nextCheckpoint.points_required
-                : "MAX",
-            },
-          ].map((item, index) => {
-            const Icon = item.icon
+                  <h2 className="mt-1 text-xl font-black">
+                    {nextCheckpoint
+                      ? `Next: ${nextCheckpoint.title}`
+                      : "All milestones reached"}
+                  </h2>
+                </div>
 
-            return (
-              <motion.div
-                key={item.label}
-                initial={{
-                  opacity: 0,
-                  y: 15,
-                }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                }}
-                transition={{
-                  delay:
-                    0.15 + index * 0.08,
-                }}
-                whileHover={{
-                  y: -4,
-                }}
-                className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 backdrop-blur-xl"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#B7E600]/[0.08]">
-                  <Icon
+                <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-[#123B27]/[0.06] sm:flex dark:bg-[#B7E600]/10">
+                  <Zap
                     size={18}
-                    className="text-[#B7E600]"
+                    className="text-[#28734A] dark:text-[#B7E600]"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-3xl font-black">
+                      {Math.round(progress)}%
+                    </p>
+
+                    <p className="mt-1 text-xs text-black/40 dark:text-white/35">
+                      milestone progress
+                    </p>
+                  </div>
+
+                  {nextCheckpoint && (
+                    <p className="text-right text-xs font-semibold text-black/40 dark:text-white/35">
+                      {pointsToNext} points to go
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#123B27]/[0.07] dark:bg-white/[0.07]">
+                  <div
+                    className="h-full rounded-full bg-[#28734A] transition-all duration-1000 ease-out dark:bg-[#B7E600]"
+                    style={{
+                      width: `${progress}%`,
+                    }}
                   />
                 </div>
 
-                <p className="mt-4 text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">
-                  {item.label}
-                </p>
+                <div className="mt-3 flex justify-between text-[9px] font-semibold text-black/30 dark:text-white/25">
+                  <span>
+                    {currentCheckpoint
+                      ? `${Number(
+                          currentCheckpoint.points_required
+                        ).toLocaleString()} pts`
+                      : "0 pts"}
+                  </span>
 
-                <p className="mt-1 text-2xl font-black">
-                  {typeof item.value === "number" ? (
-                    <AnimatedNumber
-                      value={item.value}
-                    />
-                  ) : (
-                    item.value
-                  )}
-                </p>
-              </motion.div>
-            )
-          })}
-        </section>
-
-        {/* Milestones */}
-        <section className="mt-7">
-          <div className="mb-4">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#B7E600]/60">
-              PROGRESSION
-            </p>
-
-            <h2 className="mt-1 text-xl font-black">
-              Milestones
-            </h2>
-          </div>
-
-          <div className="relative">
-            <div className="absolute left-[24px] top-6 bottom-6 w-px bg-white/[0.07]" />
-
-            <div className="space-y-3">
-              {checkpoints.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 p-7 text-center">
-                  <p className="text-sm text-white/35">
-                    No reward milestones have been configured yet.
-                  </p>
+                  <span>
+                    {nextCheckpoint
+                      ? `${Number(
+                          nextCheckpoint.points_required
+                        ).toLocaleString()} pts`
+                      : `${points.toLocaleString()} pts`}
+                  </span>
                 </div>
-              ) : (
-                checkpoints.map(
-                  (checkpoint, index) => {
-                    const reached =
-                      points >=
-                      Number(
-                        checkpoint.points_required
-                      )
+              </div>
 
-                    return (
-                      <motion.div
-                        key={checkpoint.id}
-                        initial={{
-                          opacity: 0,
-                          x: -15,
-                        }}
-                        animate={{
-                          opacity: 1,
-                          x: 0,
-                        }}
-                        transition={{
-                          delay:
-                            0.1 +
-                            index * 0.06,
-                        }}
-                        whileHover={{
-                          x: 5,
-                        }}
-                        className={`relative flex items-center gap-4 rounded-2xl border p-4 ${
-                          reached
-                            ? "border-[#B7E600]/15 bg-[#B7E600]/[0.05]"
-                            : "border-white/[0.06] bg-white/[0.025]"
-                        }`}
-                      >
-                        <div
-                          className={`relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
-                            reached
-                              ? "border-[#B7E600]/25 bg-[#B7E600]/10 text-[#B7E600]"
-                              : "border-white/[0.08] bg-[#101915] text-white/25"
-                          }`}
-                        >
-                          {reached ? (
-                            <Check size={18} />
-                          ) : (
-                            <Award size={18} />
-                          )}
-                        </div>
+              {nextCheckpoint && (
+                <div className="mt-8 rounded-2xl border border-[#123B27]/[0.07] bg-[#F7F9F7] p-4 dark:border-white/[0.07] dark:bg-white/[0.03]">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#123B27]/[0.07] text-[#28734A] dark:bg-[#B7E600]/10 dark:text-[#B7E600]">
+                      <Award size={16} />
+                    </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-bold">
-                              {checkpoint.title}
-                            </h3>
+                    <div>
+                      <p className="text-[9px] font-extrabold uppercase tracking-[0.13em] text-black/30 dark:text-white/25">
+                        NEXT MILESTONE
+                      </p>
 
-                            {reached && (
-                              <span className="rounded-full bg-[#B7E600]/10 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-[#B7E600]">
-                                Unlocked
-                              </span>
-                            )}
-                          </div>
+                      <p className="mt-1 text-sm font-bold">
+                        {nextCheckpoint.title}
+                      </p>
 
-                          <p className="mt-1 text-xs leading-5 text-white/35">
-                            {checkpoint.description ||
-                              "Sportiva milestone reward"}
-                          </p>
-                        </div>
-
-                        <div className="shrink-0 text-right">
-                          <p className="text-lg font-black">
-                            {Number(
-                              checkpoint.points_required
-                            ).toLocaleString()}
-                          </p>
-
-                          <p className="text-[8px] font-bold uppercase tracking-wider text-white/25">
-                            points
-                          </p>
-                        </div>
-                      </motion.div>
-                    )
-                  }
-                )
+                      <p className="mt-1 text-xs leading-5 text-black/40 dark:text-white/35">
+                        {nextCheckpoint.description ||
+                          `Reach ${nextCheckpoint.points_required} points to unlock this milestone.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
         </section>
 
-        {/* Benefits */}
-        <section className="mt-7">
+        {/* Overview */}
+        <section className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-black/[0.07] bg-white p-5 shadow-[0_8px_30px_rgba(18,59,39,0.04)] dark:border-white/[0.07] dark:bg-white/[0.035]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#123B27]/[0.07] dark:bg-[#B7E600]/10">
+              <Star
+                size={18}
+                className="text-[#28734A] dark:text-[#B7E600]"
+              />
+            </div>
+
+            <p className="mt-4 text-[9px] font-extrabold uppercase tracking-[0.15em] text-black/30 dark:text-white/25">
+              Current points
+            </p>
+
+            <p className="mt-1 text-2xl font-black">
+              <AnimatedNumber value={points} />
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-black/[0.07] bg-white p-5 shadow-[0_8px_30px_rgba(18,59,39,0.04)] dark:border-white/[0.07] dark:bg-white/[0.035]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#123B27]/[0.07] dark:bg-[#B7E600]/10">
+              <Trophy
+                size={18}
+                className="text-[#28734A] dark:text-[#B7E600]"
+              />
+            </div>
+
+            <p className="mt-4 text-[9px] font-extrabold uppercase tracking-[0.15em] text-black/30 dark:text-white/25">
+              Member status
+            </p>
+
+            <p className="mt-1 text-2xl font-black">
+              {currentStatus}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-black/[0.07] bg-white p-5 shadow-[0_8px_30px_rgba(18,59,39,0.04)] dark:border-white/[0.07] dark:bg-white/[0.035]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#123B27]/[0.07] dark:bg-[#B7E600]/10">
+              <Award
+                size={18}
+                className="text-[#28734A] dark:text-[#B7E600]"
+              />
+            </div>
+
+            <p className="mt-4 text-[9px] font-extrabold uppercase tracking-[0.15em] text-black/30 dark:text-white/25">
+              Next milestone
+            </p>
+
+            <p className="mt-1 text-2xl font-black">
+              {nextCheckpoint
+                ? Number(
+                    nextCheckpoint.points_required
+                  ).toLocaleString()
+                : "Complete"}
+            </p>
+          </div>
+        </section>
+
+        {/* Milestones */}
+        <section className="mt-8">
           <div className="mb-4">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#B7E600]/60">
-              BENEFITS
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#28734A] dark:text-[#B7E600]">
+              MEMBER JOURNEY
             </p>
 
             <h2 className="mt-1 text-xl font-black">
-              Unlockable rewards
+              Membership milestones
             </h2>
           </div>
 
-          {offers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
-              <Gift
-                size={26}
-                className="mx-auto text-white/20"
+          {checkpoints.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/10 bg-white p-8 text-center dark:border-white/10 dark:bg-white/[0.03]">
+              <Award
+                size={24}
+                className="mx-auto text-black/20 dark:text-white/20"
               />
 
-              <p className="mt-3 text-sm text-white/35">
-                No active rewards are available yet.
+              <p className="mt-3 text-sm text-black/40 dark:text-white/35">
+                No milestones have been configured yet.
               </p>
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {offers.map((offer, index) => {
+              {checkpoints.map((checkpoint, index) => {
+                const required = Number(
+                  checkpoint.points_required || 0
+                )
+
+                const unlocked = points >= required
+
+                return (
+                  <div
+                    key={checkpoint.id}
+                    className={`relative overflow-hidden rounded-2xl border p-5 transition ${
+                      unlocked
+                        ? "border-[#28734A]/15 bg-white shadow-[0_8px_30px_rgba(18,59,39,0.04)] dark:border-[#B7E600]/15 dark:bg-white/[0.035]"
+                        : "border-black/[0.07] bg-white dark:border-white/[0.07] dark:bg-white/[0.025]"
+                    }`}
+                  >
+                    {unlocked && (
+                      <div className="absolute right-0 top-0 h-20 w-20 rounded-bl-full bg-[#28734A]/[0.035] dark:bg-[#B7E600]/[0.035]" />
+                    )}
+
+                    <div className="relative flex items-start gap-4">
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                          unlocked
+                            ? "bg-[#28734A] text-white dark:bg-[#B7E600] dark:text-[#123B27]"
+                            : "bg-black/[0.04] text-black/25 dark:bg-white/[0.05] dark:text-white/25"
+                        }`}
+                      >
+                        {unlocked ? (
+                          <Check size={18} />
+                        ) : (
+                          <Award size={18} />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-bold">
+                            {checkpoint.title}
+                          </h3>
+
+                          <span
+                            className={`text-[9px] font-bold uppercase tracking-wider ${
+                              unlocked
+                                ? "text-[#28734A] dark:text-[#B7E600]"
+                                : "text-black/30 dark:text-white/25"
+                            }`}
+                          >
+                            {unlocked
+                              ? "Unlocked"
+                              : `${required} pts`}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-xs leading-5 text-black/40 dark:text-white/35">
+                          {checkpoint.description ||
+                            "Sportiva membership milestone"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Rewards */}
+        <section className="mt-8">
+          <div className="mb-4">
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#28734A] dark:text-[#B7E600]">
+              BENEFITS
+            </p>
+
+            <h2 className="mt-1 text-xl font-black">
+              Available rewards
+            </h2>
+
+            <p className="mt-1 text-xs text-black/40 dark:text-white/35">
+              Unlock more benefits as your points grow.
+            </p>
+          </div>
+
+          {offers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/10 bg-white p-8 text-center dark:border-white/10 dark:bg-white/[0.03]">
+              <Gift
+                size={24}
+                className="mx-auto text-black/20 dark:text-white/20"
+              />
+
+              <p className="mt-3 text-sm text-black/40 dark:text-white/35">
+                No rewards are currently available.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {offers.map((offer) => {
                 const required = Number(
                   offer.required_points || 0
                 )
 
-                const unlocked =
-                  points >= required
+                const unlocked = points >= required
 
                 return (
-                  <motion.div
+                  <div
                     key={offer.id}
-                    initial={{
-                      opacity: 0,
-                      y: 18,
-                    }}
-                    animate={{
-                      opacity: 1,
-                      y: 0,
-                    }}
-                    transition={{
-                      delay:
-                        0.1 + index * 0.08,
-                    }}
-                    whileHover={{
-                      y: -4,
-                    }}
-                    className={`relative overflow-hidden rounded-2xl border p-5 ${
+                    className={`rounded-2xl border bg-white p-5 shadow-[0_8px_30px_rgba(18,59,39,0.04)] transition hover:-translate-y-1 dark:bg-white/[0.035] ${
                       unlocked
-                        ? "border-[#B7E600]/15 bg-gradient-to-br from-[#B7E600]/[0.06] to-white/[0.025]"
-                        : "border-white/[0.06] bg-white/[0.025]"
+                        ? "border-[#28734A]/15 dark:border-[#B7E600]/15"
+                        : "border-black/[0.07] dark:border-white/[0.07]"
                     }`}
                   >
-                    {unlocked && (
-                      <motion.div
-                        animate={{
-                          x: ["-120%", "120%"],
-                        }}
-                        transition={{
-                          duration: 2.6,
-                          repeat: Infinity,
-                          repeatDelay: 3,
-                          ease: "easeInOut",
-                        }}
-                        className="absolute inset-y-0 w-20 -skew-x-12 bg-gradient-to-r from-transparent via-[#B7E600]/10 to-transparent"
-                      />
-                    )}
-
-                    <div className="relative flex items-start justify-between gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#B7E600]/[0.08]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#123B27]/[0.07] dark:bg-[#B7E600]/10">
                         <Gift
-                          size={19}
-                          className="text-[#B7E600]"
+                          size={17}
+                          className="text-[#28734A] dark:text-[#B7E600]"
                         />
                       </div>
 
                       <span
                         className={`rounded-full px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider ${
                           unlocked
-                            ? "bg-[#B7E600]/10 text-[#B7E600]"
-                            : "bg-white/[0.05] text-white/30"
+                            ? "bg-[#28734A]/10 text-[#28734A] dark:bg-[#B7E600]/10 dark:text-[#B7E600]"
+                            : "bg-black/[0.04] text-black/35 dark:bg-white/[0.05] dark:text-white/30"
                         }`}
                       >
                         {unlocked
@@ -864,24 +696,26 @@ function Rewards() {
                       </span>
                     </div>
 
-                    <h3 className="relative mt-5 text-base font-bold">
+                    <h3 className="mt-5 text-base font-bold">
                       {offer.title}
                     </h3>
 
-                    <p className="relative mt-2 text-xs leading-5 text-white/35">
+                    <p className="mt-2 text-xs leading-5 text-black/40 dark:text-white/35">
                       {offer.description}
                     </p>
 
-                    <div className="relative mt-5 flex items-end justify-between">
-                      <span className="text-sm font-black text-[#B7E600]">
-                        {offer.benefit}
-                      </span>
+                    <div className="mt-5 border-t border-black/[0.06] pt-4 dark:border-white/[0.06]">
+                      <div className="flex items-end justify-between gap-3">
+                        <span className="text-sm font-black text-[#28734A] dark:text-[#B7E600]">
+                          {offer.benefit}
+                        </span>
 
-                      <span className="text-[10px] font-semibold text-white/30">
-                        {required} pts
-                      </span>
+                        <span className="text-[10px] font-semibold text-black/30 dark:text-white/25">
+                          {required} pts
+                        </span>
+                      </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )
               })}
             </div>
@@ -889,119 +723,99 @@ function Rewards() {
         </section>
 
         {/* Activity */}
-        <section className="mt-7">
-          <div className="mb-4">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#B7E600]/60">
-              POINTS HISTORY
-            </p>
+        <section className="mt-8">
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#28734A] dark:text-[#B7E600]">
+                HISTORY
+              </p>
 
-            <h2 className="mt-1 text-xl font-black">
-              Recent activity
-            </h2>
+              <h2 className="mt-1 text-xl font-black">
+                Recent points activity
+              </h2>
+            </div>
+
+            <History
+              size={19}
+              className="text-black/20 dark:text-white/20"
+            />
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025]">
+          <div className="overflow-hidden rounded-2xl border border-black/[0.07] bg-white shadow-[0_8px_30px_rgba(18,59,39,0.04)] dark:border-white/[0.07] dark:bg-white/[0.035]">
             {transactions.length === 0 ? (
               <div className="p-8 text-center">
-                <Clock3
+                <History
                   size={24}
-                  className="mx-auto text-white/20"
+                  className="mx-auto text-black/20 dark:text-white/20"
                 />
 
-                <p className="mt-3 text-sm text-white/35">
+                <p className="mt-3 text-sm text-black/40 dark:text-white/35">
                   No points activity yet.
                 </p>
               </div>
             ) : (
-              transactions.map(
-                (transaction, index) => {
-                  const amount = Number(
-                    transaction.points || 0
-                  )
+              transactions.map((transaction) => {
+                const amount = Number(
+                  transaction.points || 0
+                )
 
-                  return (
-                    <motion.div
-                      key={transaction.id}
-                      initial={{
-                        opacity: 0,
-                        x: -12,
-                      }}
-                      animate={{
-                        opacity: 1,
-                        x: 0,
-                      }}
-                      transition={{
-                        delay:
-                          index * 0.05,
-                      }}
-                      className="flex items-center justify-between gap-4 border-b border-white/[0.05] p-4 last:border-none"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.04]">
-                          {amount >= 0 ? (
-                            <Zap
-                              size={16}
-                              className="text-[#B7E600]"
-                            />
-                          ) : (
-                            <Gift
-                              size={16}
-                              className="text-red-400"
-                            />
-                          )}
-                        </div>
+                const positive = amount >= 0
 
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {transaction.description ||
-                              transaction.type ||
-                              "Reward activity"}
-                          </p>
-
-                          <p className="mt-1 text-[9px] text-white/25">
-                            {transaction.created_at
-                              ? new Date(
-                                  transaction.created_at
-                                ).toLocaleDateString(
-                                  "en-US",
-                                  {
-                                    month:
-                                      "short",
-                                    day: "numeric",
-                                    year:
-                                      "numeric",
-                                  }
-                                )
-                              : "—"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <span
-                        className={`shrink-0 text-sm font-black ${
-                          amount >= 0
-                            ? "text-[#B7E600]"
-                            : "text-red-400"
+                return (
+                  <div
+                    key={transaction.id}
+                    className="flex items-center justify-between gap-4 border-b border-black/[0.05] px-4 py-4 last:border-none sm:px-5 dark:border-white/[0.05]"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                          positive
+                            ? "bg-[#28734A]/10 text-[#28734A] dark:bg-[#B7E600]/10 dark:text-[#B7E600]"
+                            : "bg-red-500/10 text-red-500"
                         }`}
                       >
-                        {amount >= 0
-                          ? "+"
-                          : ""}
-                        {amount}
-                      </span>
-                    </motion.div>
-                  )
-                }
-              )
+                        {positive ? (
+                          <Zap size={16} />
+                        ) : (
+                          <Gift size={16} />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {transaction.description ||
+                            transaction.type ||
+                            "Reward activity"}
+                        </p>
+
+                        <p className="mt-1 text-[9px] text-black/30 dark:text-white/25">
+                          {formatActivityDate(
+                            transaction.created_at
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`shrink-0 text-sm font-black ${
+                        positive
+                          ? "text-[#28734A] dark:text-[#B7E600]"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {positive ? "+" : ""}
+                      {amount}
+                    </span>
+                  </div>
+                )
+              })
             )}
           </div>
         </section>
 
-        <div className="mt-7 flex items-center justify-center gap-2 pb-4 text-[9px] font-bold uppercase tracking-[0.17em] text-white/20">
-          <Sparkles size={11} />
-          Sportiva Member Progress System
-          <Sparkles size={11} />
-        </div>
+        <footer className="mt-8 border-t border-black/[0.06] py-5 text-center text-[9px] font-bold uppercase tracking-[0.15em] text-black/25 dark:border-white/[0.06] dark:text-white/20">
+          Sportiva Membership & Rewards
+        </footer>
       </main>
     </div>
   )
