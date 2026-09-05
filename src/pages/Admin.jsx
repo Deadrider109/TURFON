@@ -3,7 +3,6 @@ import {
   Activity,
   CalendarDays,
   Check,
-  ChevronRight,
   ClipboardList,
   Clock3,
   Edit3,
@@ -13,7 +12,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Settings2,
   ShieldCheck,
   TicketPercent,
   Trash2,
@@ -23,9 +21,58 @@ import {
 } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
-import "./Admin.css";
 
-const NAVIGATION = [
+const COLORS = {
+  green: "#173d26",
+  green2: "#245837",
+  lime: "#a9dc63",
+  bg: "#f3f6f3",
+  white: "#ffffff",
+  text: "#172019",
+  muted: "#78847c",
+  border: "#e1e8e2",
+  soft: "#f7faf7",
+  success: "#347044",
+  warning: "#9a6820",
+  danger: "#a14e4e",
+};
+
+const EMPTY_TURF = {
+  name: "",
+  description: "",
+  price_per_hour: "",
+  image_url: "",
+};
+
+const EMPTY_SLOT = {
+  turf_id: "",
+  slot_date: "",
+  start_time: "",
+  end_time: "",
+  is_available: true,
+};
+
+const EMPTY_COUPON = {
+  code: "",
+  title: "",
+  description: "",
+  discount_type: "percentage",
+  discount_value: "",
+  min_booking_amount: "0",
+  max_discount_amount: "",
+  usage_limit: "",
+  per_user_limit: "1",
+  starts_at: "",
+  expires_at: "",
+  is_active: true,
+};
+
+const EMPTY_ANNOUNCEMENT = {
+  title: "",
+  message: "",
+};
+
+const NAV = [
   {
     id: "overview",
     label: "Overview",
@@ -68,51 +115,16 @@ const NAVIGATION = [
   },
 ];
 
-const EMPTY_TURF = {
-  name: "",
-  description: "",
-  price_per_hour: "",
-  image_url: "",
-};
+function formatDate(value) {
+  if (!value) return "—";
 
-const EMPTY_SLOT = {
-  turf_id: "",
-  slot_date: "",
-  start_time: "",
-  end_time: "",
-  is_available: true,
-};
+  const date = new Date(`${value}T00:00:00`);
 
-const EMPTY_COUPON = {
-  code: "",
-  title: "",
-  description: "",
-  discount_type: "percentage",
-  discount_value: "",
-  min_booking_amount: "0",
-  max_discount_amount: "",
-  usage_limit: "",
-  per_user_limit: "1",
-  starts_at: "",
-  expires_at: "",
-  is_active: true,
-};
-
-const EMPTY_ANNOUNCEMENT = {
-  title: "",
-  message: "",
-};
-
-function formatDate(date) {
-  if (!date) return "—";
-
-  const value = new Date(`${date}T00:00:00`);
-
-  if (Number.isNaN(value.getTime())) {
-    return date;
+  if (Number.isNaN(date.getTime())) {
+    return value;
   }
 
-  return value.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -140,9 +152,10 @@ function formatDateTime(value) {
 function formatTime(value) {
   if (!value) return "—";
 
-  const parts = String(value).split(":");
-  const hour = Number(parts[0]);
-  const minute = parts[1] || "00";
+  const [hourPart, minute = "00"] =
+    String(value).split(":");
+
+  const hour = Number(hourPart);
 
   if (!Number.isFinite(hour)) {
     return value;
@@ -154,7 +167,7 @@ function formatTime(value) {
   return `${displayHour}:${minute} ${period}`;
 }
 
-function formatInputDateTime(value) {
+function toDateTimeInput(value) {
   if (!value) return "";
 
   const date = new Date(value);
@@ -164,7 +177,10 @@ function formatInputDateTime(value) {
   }
 
   const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60000);
+
+  const local = new Date(
+    date.getTime() - offset * 60000
+  );
 
   return local.toISOString().slice(0, 16);
 }
@@ -182,49 +198,57 @@ function toISOStringOrNull(value) {
 }
 
 function generateCouponCode() {
-  const characters =
+  const chars =
     "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-  let code = "SPORTIVA-";
+  let result = "SPORTIVA-";
 
-  for (let index = 0; index < 6; index += 1) {
-    code +=
-      characters[
-        Math.floor(
-          Math.random() * characters.length
-        )
+  for (let i = 0; i < 6; i += 1) {
+    result +=
+      chars[
+        Math.floor(Math.random() * chars.length)
       ];
   }
 
-  return code;
+  return result;
 }
 
-function StatusBadge({ type = "neutral", children }) {
+function Status({ type = "neutral", children }) {
+  const backgrounds = {
+    success: "#eaf5ec",
+    warning: "#fbf1df",
+    danger: "#faeded",
+    info: "#edf3f8",
+    neutral: "#f0f2f1",
+  };
+
+  const colors = {
+    success: COLORS.success,
+    warning: COLORS.warning,
+    danger: COLORS.danger,
+    info: "#4d708e",
+    neutral: "#77827c",
+  };
+
   return (
-    <span className={`admin-status ${type}`}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 26,
+        padding: "0 9px",
+        borderRadius: 999,
+        background: backgrounds[type],
+        color: colors[type],
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: "0.04em",
+        whiteSpace: "nowrap",
+      }}
+    >
       {children}
     </span>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}) {
-  return (
-    <div className="admin-stat-card">
-      <div className="admin-stat-icon">
-        <Icon size={18} />
-      </div>
-
-      <div className="admin-stat-content">
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{detail}</small>
-      </div>
-    </div>
   );
 }
 
@@ -237,7 +261,7 @@ function Modal({
 }) {
   return (
     <div
-      className="admin-modal-overlay"
+      style={styles.overlay}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -245,20 +269,26 @@ function Modal({
       }}
     >
       <div
-        className={`admin-modal ${
-          wide ? "admin-modal-wide" : ""
-        }`}
+        style={{
+          ...styles.modal,
+          maxWidth: wide ? 790 : 620,
+        }}
       >
-        <div className="admin-modal-header">
+        <div style={styles.modalHeader}>
           <div>
-            <span>{eyebrow}</span>
-            <h2>{title}</h2>
+            <div style={styles.modalEyebrow}>
+              {eyebrow}
+            </div>
+
+            <h2 style={styles.modalTitle}>
+              {title}
+            </h2>
           </div>
 
           <button
             type="button"
-            className="admin-modal-close"
             onClick={onClose}
+            style={styles.modalClose}
           >
             <X size={18} />
           </button>
@@ -270,24 +300,970 @@ function Modal({
   );
 }
 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statIcon}>
+        <Icon size={18} />
+      </div>
+
+      <div style={styles.statBody}>
+        <span style={styles.statLabel}>
+          {label}
+        </span>
+
+        <strong style={styles.statValue}>
+          {value}
+        </strong>
+
+        <small style={styles.statDetail}>
+          {detail}
+        </small>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    display: "flex",
+    background:
+      "radial-gradient(circle at 85% 0%, rgba(120,170,120,.08), transparent 28%), #f3f6f3",
+    color: COLORS.text,
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },
+
+  sidebar: {
+    position: "fixed",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 250,
+    zIndex: 100,
+    display: "flex",
+    flexDirection: "column",
+    padding: "22px 14px 16px",
+    background:
+      "linear-gradient(180deg, #0d291b 0%, #102f20 100%)",
+    color: "#fff",
+    boxShadow:
+      "14px 0 40px rgba(10,30,17,.08)",
+  },
+
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 11,
+    padding: "0 5px 28px",
+  },
+
+  brandMark: {
+    width: 47,
+    height: 47,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    border:
+      "1px solid rgba(172,230,139,.28)",
+    background:
+      "linear-gradient(145deg, rgba(56,111,72,.75), rgba(19,65,38,.95))",
+    color: "#b7ebc5",
+    fontSize: 18,
+    fontWeight: 900,
+    flex: "0 0 auto",
+  },
+
+  brandCopy: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+
+  brandTitle: {
+    fontSize: 15,
+    fontWeight: 900,
+    letterSpacing: "0.05em",
+    lineHeight: 1,
+  },
+
+  brandSubtitle: {
+    marginTop: 5,
+    color: "rgba(220,240,226,.45)",
+    fontSize: 8,
+    fontWeight: 700,
+    letterSpacing: "0.14em",
+  },
+
+  navLabel: {
+    margin: "0 10px 10px",
+    color: "rgba(220,238,223,.4)",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: "0.15em",
+  },
+
+  nav: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+
+  navButton: {
+    position: "relative",
+    width: "100%",
+    minHeight: 43,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "0 12px",
+    border: "1px solid transparent",
+    borderRadius: 10,
+    background: "transparent",
+    color: "rgba(238,246,240,.64)",
+    fontSize: 12,
+    fontWeight: 650,
+    cursor: "pointer",
+    transition:
+      "background .2s ease, color .2s ease, transform .2s ease",
+    textAlign: "left",
+  },
+
+  navActive: {
+    background:
+      "linear-gradient(90deg, rgba(93,156,102,.18), rgba(93,156,102,.035))",
+    color: "#fff",
+    border:
+      "1px solid rgba(162,224,133,.11)",
+  },
+
+  navBadge: {
+    minWidth: 20,
+    height: 20,
+    marginLeft: "auto",
+    display: "grid",
+    placeItems: "center",
+    padding: "0 5px",
+    borderRadius: 99,
+    background: "rgba(169,220,99,.12)",
+    color: "#b7e787",
+    fontSize: 9,
+    fontWeight: 900,
+  },
+
+  sidebarBottom: {
+    marginTop: "auto",
+    paddingTop: 15,
+    borderTop:
+      "1px solid rgba(255,255,255,.07)",
+  },
+
+  secure: {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    padding: "7px 6px",
+    color: "rgba(224,239,227,.55)",
+  },
+
+  secureText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+
+  secureTitle: {
+    color: "rgba(239,247,240,.72)",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: "0.12em",
+  },
+
+  secureSubtitle: {
+    color: "rgba(220,237,223,.32)",
+    fontSize: 8,
+  },
+
+  main: {
+    width: "calc(100% - 250px)",
+    marginLeft: 250,
+    minWidth: 0,
+    minHeight: "100vh",
+    padding: "28px 32px 55px",
+  },
+
+  header: {
+    minHeight: 65,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 20,
+    marginBottom: 22,
+  },
+
+  headerEyebrow: {
+    display: "block",
+    marginBottom: 6,
+    color: "#758079",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: "0.15em",
+  },
+
+  headerTitle: {
+    margin: 0,
+    color: "#19251e",
+    fontSize: 29,
+    lineHeight: 1,
+    fontWeight: 850,
+    letterSpacing: "-0.04em",
+  },
+
+  refreshButton: {
+    minHeight: 40,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    padding: "0 13px",
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#59665e",
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  toast: {
+    minHeight: 42,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 17,
+    padding: "0 12px",
+    border:
+      "1px solid #cfe2d1",
+    borderRadius: 10,
+    background: "#f0f8f1",
+    color: "#35623f",
+    fontSize: 11,
+  },
+
+  content: {
+    width: "100%",
+    maxWidth: 1450,
+    margin: "0 auto",
+    animation:
+      "sportivaAdminFade .28s ease",
+  },
+
+  hero: {
+    position: "relative",
+    overflow: "hidden",
+    minHeight: 230,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 25,
+    marginBottom: 16,
+    padding: "30px 32px",
+    borderRadius: 21,
+    border:
+      "1px solid rgba(53,91,61,.13)",
+    background:
+      "radial-gradient(circle at 84% 24%, rgba(177,225,103,.14), transparent 24%), linear-gradient(140deg, #153a25, #214f31 65%, #294c33)",
+    color: "#fff",
+    boxShadow:
+      "0 20px 45px rgba(25,54,31,.1)",
+  },
+
+  heroEyebrow: {
+    color: "rgba(220,241,222,.5)",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: "0.15em",
+  },
+
+  heroTitle: {
+    margin: "10px 0 11px",
+    color: "#fff",
+    fontSize: "clamp(28px, 3.4vw, 42px)",
+    lineHeight: 0.98,
+    fontWeight: 850,
+    letterSpacing: "-0.05em",
+  },
+
+  heroText: {
+    maxWidth: 580,
+    margin: 0,
+    color:
+      "rgba(231,244,233,.64)",
+    fontSize: 12,
+    lineHeight: 1.65,
+  },
+
+  livePill: {
+    minHeight: 29,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    padding: "0 10px",
+    border:
+      "1px solid rgba(198,229,171,.13)",
+    borderRadius: 99,
+    background:
+      "rgba(255,255,255,.05)",
+    color: "#d8edca",
+    fontSize: 8,
+    fontWeight: 850,
+    letterSpacing: "0.08em",
+    whiteSpace: "nowrap",
+  },
+
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 99,
+    background: "#9bda70",
+    boxShadow:
+      "0 0 10px rgba(155,218,112,.6)",
+  },
+
+  statGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+
+  statCard: {
+    minWidth: 0,
+    minHeight: 119,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 11,
+    padding: 16,
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow:
+      "0 9px 27px rgba(26,52,31,.035)",
+    transition:
+      "transform .2s ease, box-shadow .2s ease",
+  },
+
+  statIcon: {
+    width: 37,
+    height: 37,
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+    border:
+      "1px solid #e0e9e1",
+    borderRadius: 10,
+    background: "#f1f7f2",
+    color: "#3b7048",
+  },
+
+  statBody: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+  },
+
+  statLabel: {
+    color: "#7e8881",
+    fontSize: 8,
+    fontWeight: 850,
+    letterSpacing: "0.09em",
+    textTransform: "uppercase",
+  },
+
+  statValue: {
+    marginTop: 8,
+    color: "#19271f",
+    fontSize: 24,
+    lineHeight: 1,
+    fontWeight: 850,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  statDetail: {
+    marginTop: 6,
+    color: "#909992",
+    fontSize: 9,
+  },
+
+  panelGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: 14,
+    marginBottom: 16,
+  },
+
+  panel: {
+    minWidth: 0,
+    padding: 19,
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 16,
+    background: "#fff",
+    boxShadow:
+      "0 10px 30px rgba(30,55,35,.035)",
+  },
+
+  panelHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingBottom: 14,
+    borderBottom:
+      "1px solid #edf1ed",
+  },
+
+  panelHeaderEyebrow: {
+    color: "#829087",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: "0.13em",
+  },
+
+  panelHeaderTitle: {
+    margin: "5px 0 0",
+    color: "#253329",
+    fontSize: 15,
+    fontWeight: 800,
+  },
+
+  simpleStats: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: 9,
+    paddingTop: 16,
+  },
+
+  simpleStat: {
+    padding: 13,
+    border:
+      "1px solid #e9eee9",
+    borderRadius: 10,
+    background: "#fafcfb",
+  },
+
+  simpleStatLabel: {
+    display: "block",
+    color: "#7d8880",
+    fontSize: 8,
+    fontWeight: 750,
+  },
+
+  simpleStatValue: {
+    display: "block",
+    marginTop: 7,
+    color: "#25342b",
+    fontSize: 20,
+    lineHeight: 1,
+    fontWeight: 800,
+  },
+
+  recentPanel: {
+    padding: 19,
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 16,
+    background: "#fff",
+    boxShadow:
+      "0 10px 30px rgba(30,55,35,.035)",
+  },
+
+  recentRow: {
+    minHeight: 58,
+    display: "grid",
+    gridTemplateColumns:
+      "1.5fr 1.1fr .7fr auto",
+    alignItems: "center",
+    gap: 12,
+    borderBottom:
+      "1px solid #edf1ed",
+  },
+
+  person: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  avatar: {
+    width: 30,
+    height: 30,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 9,
+    background: "#edf5ee",
+    color: "#3b6e46",
+    fontSize: 10,
+    fontWeight: 850,
+  },
+
+  personName: {
+    overflow: "hidden",
+    color: "#29372e",
+    fontSize: 10,
+    fontWeight: 750,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  toolbar: {
+    minHeight: 47,
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 13,
+  },
+
+  search: {
+    width: "100%",
+    maxWidth: 420,
+    height: 41,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "0 11px",
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#89938c",
+  },
+
+  searchInput: {
+    width: "100%",
+    minWidth: 0,
+    border: 0,
+    outline: 0,
+    background: "transparent",
+    color: "#253129",
+    fontSize: 11,
+  },
+
+  filter: {
+    height: 41,
+    padding: "0 10px",
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 10,
+    outline: 0,
+    background: "#fff",
+    color: "#5e6961",
+    fontSize: 10,
+  },
+
+  tableCard: {
+    overflow: "hidden",
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 16,
+    background: "#fff",
+    boxShadow:
+      "0 10px 30px rgba(30,55,35,.035)",
+  },
+
+  tableWrap: {
+    overflowX: "auto",
+  },
+
+  table: {
+    width: "100%",
+    minWidth: 880,
+    borderCollapse: "collapse",
+  },
+
+  th: {
+    padding: "13px 16px",
+    borderBottom:
+      "1px solid #e8ede8",
+    background: "#fafcfb",
+    color: "#828c85",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: "0.12em",
+    textAlign: "left",
+    textTransform: "uppercase",
+  },
+
+  td: {
+    padding: "14px 16px",
+    borderBottom:
+      "1px solid #edf1ed",
+    color: "#5f6a63",
+    fontSize: 10,
+    verticalAlign: "middle",
+  },
+
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  iconButton: {
+    width: 30,
+    height: 30,
+    display: "grid",
+    placeItems: "center",
+    border:
+      "1px solid #e0e7e1",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#66736b",
+    cursor: "pointer",
+  },
+
+  empty: {
+    minHeight: 190,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    padding: 30,
+    color: "#89928c",
+    textAlign: "center",
+  },
+
+  emptyTitle: {
+    color: "#3a493f",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+
+  emptyText: {
+    fontSize: 9,
+  },
+
+  turfGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: 14,
+  },
+
+  turfCard: {
+    overflow: "hidden",
+    border:
+      "1px solid #e1e8e2",
+    borderRadius: 16,
+    background: "#fff",
+    boxShadow:
+      "0 10px 30px rgba(30,55,35,.035)",
+  },
+
+  turfImage: {
+    height: 175,
+    overflow: "hidden",
+    position: "relative",
+    background:
+      "linear-gradient(145deg,#dce9df,#eff5ef)",
+  },
+
+  turfImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+
+  turfBody: {
+    padding: 16,
+  },
+
+  turfEyebrow: {
+    color: "#829087",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: "0.11em",
+  },
+
+  turfTitle: {
+    margin: "5px 0 7px",
+    color: "#25332a",
+    fontSize: 17,
+    fontWeight: 800,
+  },
+
+  turfDescription: {
+    minHeight: 32,
+    margin: 0,
+    color: "#838d86",
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+
+  turfPrice: {
+    marginTop: 15,
+    display: "flex",
+    alignItems: "baseline",
+    gap: 4,
+  },
+
+  turfPriceValue: {
+    color: "#2b6238",
+    fontSize: 21,
+    fontWeight: 850,
+  },
+
+  turfPriceUnit: {
+    color: "#8b948d",
+    fontSize: 9,
+  },
+
+  inlineButtons: {
+    display: "flex",
+    gap: 6,
+    marginTop: 13,
+  },
+
+  inlineButton: {
+    minHeight: 31,
+    flex: 1,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    padding: "0 7px",
+    border:
+      "1px solid #e0e7e1",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#657067",
+    fontSize: 9,
+    fontWeight: 750,
+    cursor: "pointer",
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    background:
+      "rgba(10,25,15,.55)",
+    backdropFilter: "blur(7px)",
+    WebkitBackdropFilter: "blur(7px)",
+  },
+
+  modal: {
+    width: "100%",
+    maxHeight: "calc(100vh - 32px)",
+    overflowY: "auto",
+    border:
+      "1px solid #dce5de",
+    borderRadius: 19,
+    background: "#fff",
+    boxShadow:
+      "0 35px 100px rgba(8,23,13,.25)",
+    animation:
+      "sportivaModalIn .22s ease",
+  },
+
+  modalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 20,
+    padding: "21px 22px",
+    borderBottom:
+      "1px solid #edf1ed",
+  },
+
+  modalEyebrow: {
+    color: "#758179",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+  },
+
+  modalTitle: {
+    margin: "5px 0 0",
+    color: "#29362e",
+    fontSize: 21,
+    fontWeight: 850,
+  },
+
+  modalClose: {
+    width: 33,
+    height: 33,
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+    border:
+      "1px solid #e1e7e2",
+    borderRadius: 9,
+    background: "#fff",
+    color: "#6f7972",
+    cursor: "pointer",
+  },
+
+  form: {
+    padding: "21px 22px 22px",
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: 13,
+  },
+
+  field: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+
+  full: {
+    gridColumn: "1 / -1",
+  },
+
+  label: {
+    color: "#5d6961",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 41,
+    padding: "0 10px",
+    border:
+      "1px solid #dbe4dd",
+    borderRadius: 9,
+    outline: 0,
+    background: "#fff",
+    color: "#27362d",
+    fontSize: 11,
+  },
+
+  textarea: {
+    width: "100%",
+    minHeight: 88,
+    padding: "9px 10px",
+    border:
+      "1px solid #dbe4dd",
+    borderRadius: 9,
+    outline: 0,
+    background: "#fff",
+    color: "#27362d",
+    fontSize: 11,
+    resize: "vertical",
+  },
+
+  select: {
+    width: "100%",
+    height: 41,
+    padding: "0 10px",
+    border:
+      "1px solid #dbe4dd",
+    borderRadius: 9,
+    outline: 0,
+    background: "#fff",
+    color: "#27362d",
+    fontSize: 11,
+  },
+
+  check: {
+    minHeight: 41,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 15,
+    padding: "0 10px",
+    border:
+      "1px solid #e0e7e1",
+    borderRadius: 9,
+    background: "#fafcfb",
+  },
+
+  checkLabel: {
+    color: "#4f5c54",
+    fontSize: 9,
+    fontWeight: 700,
+  },
+
+  formActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 19,
+    paddingTop: 17,
+    borderTop:
+      "1px solid #edf1ed",
+  },
+
+  codeRow: {
+    display: "flex",
+    gap: 7,
+  },
+
+  generateButton: {
+    minWidth: 86,
+    border:
+      "1px solid #dbe7dc",
+    borderRadius: 9,
+    background: "#f2f7f3",
+    color: "#3c6845",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+};
+
 export default function Admin() {
   const [activeSection, setActiveSection] =
     useState("overview");
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] =
+    useState(false);
+
   const [message, setMessage] = useState("");
 
   const [turfs, setTurfs] = useState([]);
   const [slots, setSlots] = useState([]);
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] =
+    useState([]);
   const [users, setUsers] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] =
+    useState([]);
 
-  const [coupons, setCoupons] = useState([]);
-  const [couponUsages, setCouponUsages] = useState([]);
+  const [coupons, setCoupons] =
+    useState([]);
+  const [couponUsages, setCouponUsages] =
+    useState([]);
 
-  const [memberRewards, setMemberRewards] = useState([]);
+  const [memberRewards, setMemberRewards] =
+    useState([]);
   const [rewardCheckpoints, setRewardCheckpoints] =
     useState([]);
   const [communityOffers, setCommunityOffers] =
@@ -297,32 +1273,41 @@ export default function Admin() {
   const [rewardRedemptions, setRewardRedemptions] =
     useState([]);
 
-  const [rewardSection, setRewardSection] =
+  const [rewardTab, setRewardTab] =
     useState("members");
 
-  const [turfSearch, setTurfSearch] = useState("");
-  const [slotSearch, setSlotSearch] = useState("");
-  const [slotDate, setSlotDate] = useState("");
-  const [slotTurf, setSlotTurf] = useState("all");
+  const [turfSearch, setTurfSearch] =
+    useState("");
+
+  const [slotSearch, setSlotSearch] =
+    useState("");
+  const [slotTurf, setSlotTurf] =
+    useState("all");
+  const [slotDate, setSlotDate] =
+    useState("");
 
   const [bookingSearch, setBookingSearch] =
     useState("");
   const [bookingStatus, setBookingStatus] =
     useState("all");
 
-  const [userSearch, setUserSearch] = useState("");
+  const [userSearch, setUserSearch] =
+    useState("");
+
   const [couponSearch, setCouponSearch] =
     useState("");
 
   const [showTurfModal, setShowTurfModal] =
     useState(false);
-  const [editingTurf, setEditingTurf] = useState(null);
+  const [editingTurf, setEditingTurf] =
+    useState(null);
   const [turfForm, setTurfForm] =
     useState(EMPTY_TURF);
 
   const [showSlotModal, setShowSlotModal] =
     useState(false);
-  const [editingSlot, setEditingSlot] = useState(null);
+  const [editingSlot, setEditingSlot] =
+    useState(null);
   const [slotForm, setSlotForm] =
     useState(EMPTY_SLOT);
 
@@ -333,219 +1318,237 @@ export default function Admin() {
   const [couponForm, setCouponForm] =
     useState(EMPTY_COUPON);
 
-  const [showAnnouncementModal, setShowAnnouncementModal] =
-    useState(false);
-  const [announcementForm, setAnnouncementForm] =
-    useState(EMPTY_ANNOUNCEMENT);
+  const [
+    showAnnouncementModal,
+    setShowAnnouncementModal,
+  ] = useState(false);
 
-  const [showPointsModal, setShowPointsModal] =
-    useState(false);
-  const [selectedMember, setSelectedMember] =
-    useState(null);
+  const [
+    announcementForm,
+    setAnnouncementForm,
+  ] = useState(EMPTY_ANNOUNCEMENT);
+
+  const [
+    showPointsModal,
+    setShowPointsModal,
+  ] = useState(false);
+
+  const [
+    selectedMember,
+    setSelectedMember,
+  ] = useState(null);
+
   const [pointsAmount, setPointsAmount] =
     useState("");
+
   const [pointsReason, setPointsReason] =
     useState("");
 
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] =
+    useState(false);
 
   function notify(text) {
     setMessage(text);
 
-    window.clearTimeout(notify.timeout);
+    window.clearTimeout(
+      notify.timeout
+    );
 
-    notify.timeout = window.setTimeout(() => {
-      setMessage("");
-    }, 3500);
+    notify.timeout = window.setTimeout(
+      () => {
+        setMessage("");
+      },
+      3500
+    );
   }
 
   async function loadData(options = {}) {
-    const isRefresh = Boolean(options.refresh);
+    const refresh = Boolean(
+      options.refresh
+    );
 
-    if (isRefresh) {
+    if (refresh) {
       setRefreshing(true);
     } else {
       setLoading(true);
     }
 
-    try {
-      const results = await Promise.all([
-        supabase
-          .from("turfs")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+    const results = await Promise.all([
+      supabase
+        .from("turfs")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("time_slots")
-          .select("*, turfs(name)")
-          .order("slot_date", {
-            ascending: true,
-          })
-          .order("start_time", {
-            ascending: true,
-          }),
+      supabase
+        .from("time_slots")
+        .select("*, turfs(name)")
+        .order("slot_date", {
+          ascending: true,
+        })
+        .order("start_time", {
+          ascending: true,
+        }),
 
-        supabase
-          .from("bookings")
-          .select(
-            "*, turfs(name), profiles(full_name, phone, email)"
-          )
-          .order("created_at", {
-            ascending: false,
-          }),
+      supabase
+        .from("bookings")
+        .select(
+          "*, turfs(name), profiles(full_name, phone, email)"
+        )
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("profiles")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+      supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("announcements")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+      supabase
+        .from("announcements")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("coupons")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+      supabase
+        .from("coupons")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("coupon_usages")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+      supabase
+        .from("coupon_usages")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("member_rewards")
-          .select("*")
-          .order("points", {
-            ascending: false,
-          }),
+      supabase
+        .from("member_rewards")
+        .select("*")
+        .order("points", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("reward_checkpoints")
-          .select("*")
-          .order("points_required", {
-            ascending: true,
-          }),
+      supabase
+        .from("reward_checkpoints")
+        .select("*")
+        .order("points_required", {
+          ascending: true,
+        }),
 
-        supabase
-          .from("community_offers")
-          .select("*")
-          .order("required_points", {
-            ascending: true,
-          }),
+      supabase
+        .from("community_offers")
+        .select("*")
+        .order("required_points", {
+          ascending: true,
+        }),
 
-        supabase
-          .from("reward_transactions")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          })
-          .limit(200),
+      supabase
+        .from("reward_transactions")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(200),
 
-        supabase
-          .from("reward_redemptions")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          })
-          .limit(200),
-      ]);
+      supabase
+        .from("reward_redemptions")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(200),
+    ]);
 
-      const [
-        turfsResult,
-        slotsResult,
-        bookingsResult,
-        usersResult,
-        announcementsResult,
-        couponsResult,
-        usagesResult,
-        rewardsResult,
-        checkpointsResult,
-        offersResult,
-        transactionsResult,
-        redemptionsResult,
-      ] = results;
+    const [
+      turfResult,
+      slotResult,
+      bookingResult,
+      userResult,
+      announcementResult,
+      couponResult,
+      usageResult,
+      rewardResult,
+      checkpointResult,
+      offerResult,
+      transactionResult,
+      redemptionResult,
+    ] = results;
 
-      if (!turfsResult.error) {
-        setTurfs(turfsResult.data || []);
-      }
+    if (!turfResult.error) {
+      setTurfs(turfResult.data || []);
+    }
 
-      if (!slotsResult.error) {
-        setSlots(slotsResult.data || []);
-      }
+    if (!slotResult.error) {
+      setSlots(slotResult.data || []);
+    }
 
-      if (!bookingsResult.error) {
-        setBookings(bookingsResult.data || []);
-      }
+    if (!bookingResult.error) {
+      setBookings(
+        bookingResult.data || []
+      );
+    }
 
-      if (!usersResult.error) {
-        setUsers(usersResult.data || []);
-      }
+    if (!userResult.error) {
+      setUsers(userResult.data || []);
+    }
 
-      if (!announcementsResult.error) {
-        setAnnouncements(
-          announcementsResult.data || []
-        );
-      }
+    if (!announcementResult.error) {
+      setAnnouncements(
+        announcementResult.data || []
+      );
+    }
 
-      if (!couponsResult.error) {
-        setCoupons(couponsResult.data || []);
-      } else {
-        console.error(
-          "Coupons:",
-          couponsResult.error
-        );
-      }
+    if (!couponResult.error) {
+      setCoupons(
+        couponResult.data || []
+      );
+    } else {
+      console.error(
+        "Coupon error:",
+        couponResult.error
+      );
+    }
 
-      if (!usagesResult.error) {
-        setCouponUsages(usagesResult.data || []);
-      }
+    if (!usageResult.error) {
+      setCouponUsages(
+        usageResult.data || []
+      );
+    }
 
-      if (!rewardsResult.error) {
-        setMemberRewards(
-          rewardsResult.data || []
-        );
-      }
+    if (!rewardResult.error) {
+      setMemberRewards(
+        rewardResult.data || []
+      );
+    }
 
-      if (!checkpointsResult.error) {
-        setRewardCheckpoints(
-          checkpointsResult.data || []
-        );
-      }
+    if (!checkpointResult.error) {
+      setRewardCheckpoints(
+        checkpointResult.data || []
+      );
+    }
 
-      if (!offersResult.error) {
-        setCommunityOffers(
-          offersResult.data || []
-        );
-      }
+    if (!offerResult.error) {
+      setCommunityOffers(
+        offerResult.data || []
+      );
+    }
 
-      if (!transactionsResult.error) {
-        setRewardTransactions(
-          transactionsResult.data || []
-        );
-      }
+    if (!transactionResult.error) {
+      setRewardTransactions(
+        transactionResult.data || []
+      );
+    }
 
-      if (!redemptionsResult.error) {
-        setRewardRedemptions(
-          redemptionsResult.data || []
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      notify(
-        error.message ||
-          "Unable to load admin dashboard."
+    if (!redemptionResult.error) {
+      setRewardRedemptions(
+        redemptionResult.data || []
       );
     }
 
@@ -557,7 +1560,7 @@ export default function Admin() {
     loadData();
 
     const channel = supabase
-      .channel("sportiva-admin-updates")
+      .channel("sportiva-admin-live")
       .on(
         "postgres_changes",
         {
@@ -592,17 +1595,17 @@ export default function Admin() {
     };
   }, []);
 
-  // ============================================================
-  // TURFS
-  // ============================================================
+  /* ============================================================
+     TURFS
+  ============================================================ */
 
-  function createTurf() {
+  function openCreateTurf() {
     setEditingTurf(null);
     setTurfForm(EMPTY_TURF);
     setShowTurfModal(true);
   }
 
-  function editTurf(turf) {
+  function openEditTurf(turf) {
     setEditingTurf(turf);
 
     setTurfForm({
@@ -624,25 +1627,19 @@ export default function Admin() {
       return;
     }
 
-    if (
-      !turfForm.price_per_hour ||
-      Number(turfForm.price_per_hour) <= 0
-    ) {
-      notify("Enter a valid price.");
-      return;
-    }
-
     setSaving(true);
 
     const payload = {
       name: turfForm.name.trim(),
       description:
-        turfForm.description.trim() || null,
+        turfForm.description.trim() ||
+        null,
       price_per_hour: Number(
         turfForm.price_per_hour
       ),
       image_url:
-        turfForm.image_url.trim() || null,
+        turfForm.image_url.trim() ||
+        null,
     };
 
     const result = editingTurf
@@ -650,12 +1647,14 @@ export default function Admin() {
           .from("turfs")
           .update(payload)
           .eq("id", editingTurf.id)
-      : await supabase.from("turfs").insert([
-          {
-            ...payload,
-            is_active: true,
-          },
-        ]);
+      : await supabase
+          .from("turfs")
+          .insert([
+            {
+              ...payload,
+              is_active: true,
+            },
+          ]);
 
     setSaving(false);
 
@@ -702,7 +1701,7 @@ export default function Admin() {
   async function deleteTurf(turf) {
     if (
       !window.confirm(
-        `Delete "${turf.name}"?`
+        `Delete ${turf.name}?`
       )
     ) {
       return;
@@ -722,11 +1721,11 @@ export default function Admin() {
     await loadData();
   }
 
-  // ============================================================
-  // SLOTS
-  // ============================================================
+  /* ============================================================
+     SLOTS
+  ============================================================ */
 
-  function createSlot() {
+  function openCreateSlot() {
     setEditingSlot(null);
 
     setSlotForm({
@@ -742,14 +1741,15 @@ export default function Admin() {
     setShowSlotModal(true);
   }
 
-  function editSlot(slot) {
+  function openEditSlot(slot) {
     setEditingSlot(slot);
 
     setSlotForm({
       turf_id: String(
         slot.turf_id || ""
       ),
-      slot_date: slot.slot_date || "",
+      slot_date:
+        slot.slot_date || "",
       start_time: String(
         slot.start_time || ""
       ).slice(0, 5),
@@ -772,7 +1772,9 @@ export default function Admin() {
       !slotForm.start_time ||
       !slotForm.end_time
     ) {
-      notify("Complete all slot fields.");
+      notify(
+        "Complete all time slot fields."
+      );
       return;
     }
 
@@ -780,20 +1782,26 @@ export default function Admin() {
       slotForm.end_time <=
       slotForm.start_time
     ) {
-      notify("End time must be after start time.");
+      notify(
+        "End time must be after start time."
+      );
       return;
     }
 
     setSaving(true);
 
     const payload = {
-      turf_id: Number(slotForm.turf_id),
-      slot_date: slotForm.slot_date,
-      start_time: slotForm.start_time,
-      end_time: slotForm.end_time,
-      is_available: Boolean(
-        slotForm.is_available
+      turf_id: Number(
+        slotForm.turf_id
       ),
+      slot_date:
+        slotForm.slot_date,
+      start_time:
+        slotForm.start_time,
+      end_time:
+        slotForm.end_time,
+      is_available:
+        Boolean(slotForm.is_available),
     };
 
     const result = editingSlot
@@ -829,7 +1837,8 @@ export default function Admin() {
     const { error } = await supabase
       .from("time_slots")
       .update({
-        is_available: !slot.is_available,
+        is_available:
+          !slot.is_available,
       })
       .eq("id", slot.id);
 
@@ -870,11 +1879,11 @@ export default function Admin() {
     await loadData();
   }
 
-  // ============================================================
-  // BOOKINGS
-  // ============================================================
+  /* ============================================================
+     BOOKINGS
+  ============================================================ */
 
-  async function setBookingStatus(
+  async function updateBooking(
     booking,
     status
   ) {
@@ -897,11 +1906,11 @@ export default function Admin() {
     await loadData();
   }
 
-  // ============================================================
-  // COUPONS
-  // ============================================================
+  /* ============================================================
+     COUPONS
+  ============================================================ */
 
-  function createCoupon() {
+  function openCreateCoupon() {
     setEditingCoupon(null);
 
     setCouponForm({
@@ -912,30 +1921,34 @@ export default function Admin() {
     setShowCouponModal(true);
   }
 
-  function editCoupon(coupon) {
+  function openEditCoupon(coupon) {
     setEditingCoupon(coupon);
 
     setCouponForm({
       code: coupon.code || "",
       title: coupon.title || "",
-      description: coupon.description || "",
+      description:
+        coupon.description || "",
       discount_type:
         coupon.discount_type ||
         "percentage",
       discount_value:
         coupon.discount_value ?? "",
       min_booking_amount:
-        coupon.min_booking_amount ?? "0",
+        coupon.min_booking_amount ??
+        "0",
       max_discount_amount:
-        coupon.max_discount_amount ?? "",
+        coupon.max_discount_amount ??
+        "",
       usage_limit:
         coupon.usage_limit ?? "",
       per_user_limit:
-        coupon.per_user_limit ?? "1",
-      starts_at: formatInputDateTime(
+        coupon.per_user_limit ??
+        "1",
+      starts_at: toDateTimeInput(
         coupon.starts_at
       ),
-      expires_at: formatInputDateTime(
+      expires_at: toDateTimeInput(
         coupon.expires_at
       ),
       is_active:
@@ -952,30 +1965,34 @@ export default function Admin() {
       .trim()
       .toUpperCase();
 
-    const discountValue = Number(
+    const discount = Number(
       couponForm.discount_value
     );
 
     if (!code) {
-      notify("Coupon code is required.");
+      notify(
+        "Coupon code is required."
+      );
       return;
     }
 
     if (
-      !Number.isFinite(discountValue) ||
-      discountValue <= 0
+      !Number.isFinite(discount) ||
+      discount <= 0
     ) {
-      notify("Enter a valid discount.");
+      notify(
+        "Enter a valid discount."
+      );
       return;
     }
 
     if (
       couponForm.discount_type ===
         "percentage" &&
-      discountValue > 100
+      discount > 100
     ) {
       notify(
-        "Percentage discount cannot exceed 100%."
+        "Percentage cannot exceed 100%."
       );
       return;
     }
@@ -983,11 +2000,15 @@ export default function Admin() {
     if (
       couponForm.starts_at &&
       couponForm.expires_at &&
-      new Date(couponForm.expires_at) <=
-        new Date(couponForm.starts_at)
+      new Date(
+        couponForm.expires_at
+      ) <=
+        new Date(
+          couponForm.starts_at
+        )
     ) {
       notify(
-        "Expiry must be after the start date."
+        "Expiry must be after start date."
       );
       return;
     }
@@ -1001,16 +2022,19 @@ export default function Admin() {
     const payload = {
       code,
       title:
-        couponForm.title.trim() || code,
+        couponForm.title.trim() ||
+        code,
       description:
         couponForm.description.trim() ||
         null,
       discount_type:
         couponForm.discount_type,
-      discount_value: discountValue,
-      min_booking_amount: Number(
-        couponForm.min_booking_amount || 0
-      ),
+      discount_value: discount,
+      min_booking_amount:
+        Number(
+          couponForm.min_booking_amount ||
+            0
+        ),
       max_discount_amount:
         couponForm.discount_type ===
           "percentage" &&
@@ -1019,21 +2043,29 @@ export default function Admin() {
               couponForm.max_discount_amount
             )
           : null,
-      usage_limit: couponForm.usage_limit
-        ? Number(couponForm.usage_limit)
-        : null,
-      per_user_limit: Number(
-        couponForm.per_user_limit || 1
-      ),
-      starts_at: toISOStringOrNull(
-        couponForm.starts_at
-      ),
-      expires_at: toISOStringOrNull(
-        couponForm.expires_at
-      ),
-      is_active: Boolean(
-        couponForm.is_active
-      ),
+      usage_limit:
+        couponForm.usage_limit
+          ? Number(
+              couponForm.usage_limit
+            )
+          : null,
+      per_user_limit:
+        Number(
+          couponForm.per_user_limit ||
+            1
+        ),
+      starts_at:
+        toISOStringOrNull(
+          couponForm.starts_at
+        ),
+      expires_at:
+        toISOStringOrNull(
+          couponForm.expires_at
+        ),
+      is_active:
+        Boolean(
+          couponForm.is_active
+        ),
     };
 
     const result = editingCoupon
@@ -1041,12 +2073,15 @@ export default function Admin() {
           .from("coupons")
           .update(payload)
           .eq("id", editingCoupon.id)
-      : await supabase.from("coupons").insert([
-          {
-            ...payload,
-            created_by: user?.id || null,
-          },
-        ]);
+      : await supabase
+          .from("coupons")
+          .insert([
+            {
+              ...payload,
+              created_by:
+                user?.id || null,
+            },
+          ]);
 
     setSaving(false);
 
@@ -1082,11 +2117,14 @@ export default function Admin() {
     await loadData();
   }
 
-  async function toggleCoupon(coupon) {
+  async function toggleCoupon(
+    coupon
+  ) {
     const { error } = await supabase
       .from("coupons")
       .update({
-        is_active: !coupon.is_active,
+        is_active:
+          !coupon.is_active,
       })
       .eq("id", coupon.id);
 
@@ -1104,10 +2142,12 @@ export default function Admin() {
     await loadData();
   }
 
-  async function deleteCoupon(coupon) {
+  async function deleteCoupon(
+    coupon
+  ) {
     if (
       !window.confirm(
-        `Delete "${coupon.code}"?`
+        `Delete coupon ${coupon.code}?`
       )
     ) {
       return;
@@ -1129,22 +2169,33 @@ export default function Admin() {
 
   async function copyCoupon(code) {
     try {
-      await navigator.clipboard.writeText(code);
-      notify(`${code} copied.`);
+      await navigator.clipboard.writeText(
+        code
+      );
+
+      notify(
+        `${code} copied to clipboard.`
+      );
     } catch {
-      notify("Could not copy coupon.");
+      notify("Unable to copy coupon.");
     }
   }
 
-  // ============================================================
-  // ANNOUNCEMENTS
-  // ============================================================
+  /* ============================================================
+     ANNOUNCEMENTS
+  ============================================================ */
 
-  async function createAnnouncement(event) {
+  async function createAnnouncement(
+    event
+  ) {
     event.preventDefault();
 
-    if (!announcementForm.title.trim()) {
-      notify("Announcement title is required.");
+    if (
+      !announcementForm.title.trim()
+    ) {
+      notify(
+        "Announcement title is required."
+      );
       return;
     }
 
@@ -1167,11 +2218,15 @@ export default function Admin() {
     }
 
     setShowAnnouncementModal(false);
+
     setAnnouncementForm(
       EMPTY_ANNOUNCEMENT
     );
 
-    notify("Announcement published.");
+    notify(
+      "Announcement published."
+    );
+
     await loadData();
   }
 
@@ -1181,7 +2236,8 @@ export default function Admin() {
     const { error } = await supabase
       .from("announcements")
       .update({
-        is_active: !announcement.is_active,
+        is_active:
+          !announcement.is_active,
       })
       .eq("id", announcement.id);
 
@@ -1220,13 +2276,16 @@ export default function Admin() {
       return;
     }
 
-    notify("Announcement deleted.");
+    notify(
+      "Announcement deleted."
+    );
+
     await loadData();
   }
 
-  // ============================================================
-  // REWARDS
-  // ============================================================
+  /* ============================================================
+     REWARDS
+  ============================================================ */
 
   function openPoints(member) {
     setSelectedMember(member);
@@ -1238,13 +2297,17 @@ export default function Admin() {
   async function adjustPoints(mode) {
     if (!selectedMember) return;
 
-    const amount = Number(pointsAmount);
+    const amount = Number(
+      pointsAmount
+    );
 
     if (
       !Number.isFinite(amount) ||
       amount <= 0
     ) {
-      notify("Enter a valid points amount.");
+      notify(
+        "Enter a valid points amount."
+      );
       return;
     }
 
@@ -1255,11 +2318,14 @@ export default function Admin() {
     );
 
     const lifetime = Number(
-      selectedMember.lifetime_points || 0
+      selectedMember.lifetime_points ||
+        0
     );
 
     const delta =
-      mode === "add" ? amount : -amount;
+      mode === "add"
+        ? amount
+        : -amount;
 
     const nextPoints = Math.max(
       0,
@@ -1271,7 +2337,7 @@ export default function Admin() {
         ? lifetime + amount
         : lifetime;
 
-    const { error: updateError } =
+    const { error } =
       await supabase
         .from("member_rewards")
         .upsert(
@@ -1279,18 +2345,20 @@ export default function Admin() {
             user_id:
               selectedMember.user_id,
             points: nextPoints,
-            lifetime_points: nextLifetime,
+            lifetime_points:
+              nextLifetime,
             updated_at:
               new Date().toISOString(),
           },
           {
-            onConflict: "user_id",
+            onConflict:
+              "user_id",
           }
         );
 
-    if (updateError) {
+    if (error) {
       setSaving(false);
-      notify(updateError.message);
+      notify(error.message);
       return;
     }
 
@@ -1317,7 +2385,9 @@ export default function Admin() {
     setSaving(false);
 
     if (transactionError) {
-      notify(transactionError.message);
+      notify(
+        transactionError.message
+      );
       return;
     }
 
@@ -1333,568 +2403,1070 @@ export default function Admin() {
     await loadData();
   }
 
-  // ============================================================
-  // FILTERS
-  // ============================================================
+  /* ============================================================
+     FILTERS
+  ============================================================ */
 
-  const filteredTurfs = useMemo(() => {
-    const query = turfSearch
-      .trim()
-      .toLowerCase();
+  const filteredTurfs =
+    useMemo(() => {
+      const query = turfSearch
+        .trim()
+        .toLowerCase();
 
-    if (!query) return turfs;
+      if (!query) {
+        return turfs;
+      }
 
-    return turfs.filter((turf) =>
-      `${turf.name} ${
-        turf.description || ""
-      }`
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [turfs, turfSearch]);
-
-  const filteredSlots = useMemo(() => {
-    const query = slotSearch
-      .trim()
-      .toLowerCase();
-
-    return slots.filter((slot) => {
-      const matchesTurf =
-        slotTurf === "all" ||
-        String(slot.turf_id) ===
-          String(slotTurf);
-
-      const matchesDate =
-        !slotDate ||
-        slot.slot_date === slotDate;
-
-      const matchesSearch =
-        !query ||
-        slot.turfs?.name
-          ?.toLowerCase()
-          .includes(query);
-
-      return (
-        matchesTurf &&
-        matchesDate &&
-        matchesSearch
+      return turfs.filter((turf) =>
+        `${turf.name} ${
+          turf.description || ""
+        }`
+          .toLowerCase()
+          .includes(query)
       );
-    });
-  }, [
-    slots,
-    slotSearch,
-    slotDate,
-    slotTurf,
-  ]);
+    }, [turfs, turfSearch]);
 
-  const filteredBookings = useMemo(() => {
-    const query = bookingSearch
-      .trim()
-      .toLowerCase();
+  const filteredSlots =
+    useMemo(() => {
+      const query = slotSearch
+        .trim()
+        .toLowerCase();
 
-    return bookings.filter((booking) => {
-      const statusMatch =
-        bookingStatus === "all" ||
-        booking.status === bookingStatus;
+      return slots.filter((slot) => {
+        const turfMatch =
+          slotTurf === "all" ||
+          String(slot.turf_id) ===
+            String(slotTurf);
 
-      const text =
-        `${booking.profiles?.full_name || ""} ${
-          booking.profiles?.email || ""
-        } ${
-          booking.profiles?.phone || ""
-        } ${
-          booking.turfs?.name || ""
-        }`.toLowerCase();
+        const dateMatch =
+          !slotDate ||
+          slot.slot_date === slotDate;
 
-      return (
-        statusMatch &&
-        (!query || text.includes(query))
+        const searchMatch =
+          !query ||
+          slot.turfs?.name
+            ?.toLowerCase()
+            .includes(query);
+
+        return (
+          turfMatch &&
+          dateMatch &&
+          searchMatch
+        );
+      });
+    }, [
+      slots,
+      slotSearch,
+      slotDate,
+      slotTurf,
+    ]);
+
+  const filteredBookings =
+    useMemo(() => {
+      const query =
+        bookingSearch
+          .trim()
+          .toLowerCase();
+
+      return bookings.filter(
+        (booking) => {
+          const statusMatch =
+            bookingStatus === "all" ||
+            booking.status ===
+              bookingStatus;
+
+          const searchable =
+            `${booking.profiles?.full_name || ""} ${
+              booking.profiles?.email || ""
+            } ${
+              booking.profiles?.phone || ""
+            } ${
+              booking.turfs?.name || ""
+            }`.toLowerCase();
+
+          return (
+            statusMatch &&
+            (!query ||
+              searchable.includes(
+                query
+              ))
+          );
+        }
       );
-    });
-  }, [
-    bookings,
-    bookingSearch,
-    bookingStatus,
-  ]);
+    }, [
+      bookings,
+      bookingSearch,
+      bookingStatus,
+    ]);
 
-  const filteredUsers = useMemo(() => {
-    const query = userSearch
-      .trim()
-      .toLowerCase();
+  const filteredUsers =
+    useMemo(() => {
+      const query = userSearch
+        .trim()
+        .toLowerCase();
 
-    if (!query) return users;
+      if (!query) return users;
 
-    return users.filter((user) =>
-      `${user.full_name || ""} ${
-        user.email || ""
-      } ${user.phone || ""}`
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [users, userSearch]);
+      return users.filter((user) =>
+        `${user.full_name || ""} ${
+          user.email || ""
+        } ${user.phone || ""}`
+          .toLowerCase()
+          .includes(query)
+      );
+    }, [users, userSearch]);
 
-  const filteredCoupons = useMemo(() => {
-    const query = couponSearch
-      .trim()
-      .toLowerCase();
+  const filteredCoupons =
+    useMemo(() => {
+      const query = couponSearch
+        .trim()
+        .toLowerCase();
 
-    if (!query) return coupons;
+      if (!query) return coupons;
 
-    return coupons.filter((coupon) =>
-      `${coupon.code || ""} ${
-        coupon.title || ""
-      } ${coupon.description || ""}`
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [coupons, couponSearch]);
+      return coupons.filter(
+        (coupon) =>
+          `${coupon.code || ""} ${
+            coupon.title || ""
+          } ${
+            coupon.description || ""
+          }`
+            .toLowerCase()
+            .includes(query)
+      );
+    }, [coupons, couponSearch]);
 
-  // ============================================================
-  // STATS
-  // ============================================================
+  /* ============================================================
+     STATS
+  ============================================================ */
 
   const activeTurfs = turfs.filter(
-    (turf) => turf.is_active
+    (item) => item.is_active
   ).length;
 
-  const activeCoupons = coupons.filter(
-    (coupon) => coupon.is_active
-  ).length;
+  const activeCoupons =
+    coupons.filter(
+      (item) => item.is_active
+    ).length;
 
-  const pendingBookings = bookings.filter(
-    (booking) => booking.status === "pending"
-  );
+  const pendingBookings =
+    bookings.filter(
+      (item) =>
+        item.status === "pending"
+    );
 
   const confirmedBookings =
     bookings.filter(
-      (booking) =>
-        booking.status === "confirmed"
+      (item) =>
+        item.status === "confirmed"
     );
 
-  const revenue = confirmedBookings.reduce(
-    (sum, booking) =>
-      sum +
-      Number(booking.total_amount || 0),
-    0
-  );
-
-  const currentPoints =
-    memberRewards.reduce(
-      (sum, member) =>
-        sum + Number(member.points || 0),
+  const revenue =
+    confirmedBookings.reduce(
+      (sum, item) =>
+        sum +
+        Number(
+          item.total_amount || 0
+        ),
       0
     );
 
-  const navTitle =
-    NAVIGATION.find(
-      (item) => item.id === activeSection
-    )?.label || "Overview";
-
-  // ============================================================
-  // LOADING
-  // ============================================================
+  const currentPoints =
+    memberRewards.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.points || 0),
+      0
+    );
 
   if (loading) {
     return (
-      <div className="admin-loading">
-        <div className="admin-loading-mark">
-          S
-        </div>
+      <>
+        <style>
+          {`
+            @keyframes sportivaLoading {
+              from { transform: translateX(-120%); }
+              to { transform: translateX(320%); }
+            }
 
-        <div className="admin-loading-copy">
-          <strong>
-            SPORTIVA ADMIN
-          </strong>
+            @keyframes sportivaFloat {
+              0%,100% { transform: translateY(0); }
+              50% { transform: translateY(-5px); }
+            }
+          `}
+        </style>
 
-          <span>
-            Preparing your control center
-          </span>
-        </div>
-
-        <div className="admin-loading-line">
-          <div />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="admin-page">
-
-      {/* ======================================================
-          SIDEBAR
-      ====================================================== */}
-
-      <aside className="admin-sidebar">
-
-        <div className="admin-brand">
-          <div className="admin-brand-mark">
+        <div style={styles.loadingScreen}>
+          <div
+            style={{
+              ...styles.brandMark,
+              animation:
+                "sportivaFloat 2s ease-in-out infinite",
+            }}
+          >
             S
           </div>
 
-          <div className="admin-brand-copy">
-            <strong>SPORTIVA</strong>
-            <span>ADMIN CONTROL</span>
+          <strong
+            style={{
+              color: COLORS.green,
+              fontSize: 11,
+              letterSpacing: "0.12em",
+            }}
+          >
+            SPORTIVA ADMIN
+          </strong>
+
+          <span
+            style={{
+              color: COLORS.muted,
+              fontSize: 10,
+            }}
+          >
+            Loading control center...
+          </span>
+
+          <div style={styles.loadingBar}>
+            <div
+              style={{
+                height: "100%",
+                width: "45%",
+                background:
+                  "linear-gradient(90deg,#173d26,#a9dc63)",
+                borderRadius: 99,
+                animation:
+                  "sportivaLoading 1.2s ease-in-out infinite",
+              }}
+            />
           </div>
         </div>
+      </>
+    );
+  }
 
-        <div className="admin-nav-label">
-          MANAGEMENT
-        </div>
+  const activeNav =
+    NAV.find(
+      (item) =>
+        item.id === activeSection
+    ) || NAV[0];
 
-        <nav className="admin-nav">
+  return (
+    <>
+      <style>
+        {`
+          * {
+            box-sizing: border-box;
+          }
 
-          {NAVIGATION.map((item) => {
-            const Icon = item.icon;
+          @keyframes sportivaAdminFade {
+            from {
+              opacity: 0;
+              transform: translateY(7px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={
-                  activeSection === item.id
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setActiveSection(item.id)
-                }
-              >
-                <Icon size={17} />
+          @keyframes sportivaModalIn {
+            from {
+              opacity: 0;
+              transform: translateY(12px) scale(.985);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
+          }
 
-                <span>{item.label}</span>
+          .sportiva-admin-nav-button:hover {
+            background: rgba(255,255,255,.055) !important;
+            color: #fff !important;
+            transform: translateX(2px);
+          }
 
-                {item.id === "bookings" &&
-                  pendingBookings.length > 0 && (
-                    <b>
-                      {pendingBookings.length}
-                    </b>
-                  )}
+          .sportiva-admin-stat:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 34px rgba(25,50,31,.07) !important;
+          }
 
-                {item.id === "coupons" &&
-                  activeCoupons > 0 && (
-                    <b>
-                      {activeCoupons}
-                    </b>
-                  )}
+          .sportiva-admin-turf:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 34px rgba(25,50,31,.07) !important;
+          }
 
-              </button>
-            );
-          })}
+          .sportiva-admin-table tr:hover td {
+            background: #fbfdfb;
+          }
 
-        </nav>
+          @media (max-width: 1200px) {
+            .sportiva-admin-stat-grid {
+              grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+            }
 
-        <div className="admin-sidebar-bottom">
+            .sportiva-admin-turf-grid {
+              grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+            }
+          }
 
-          <div className="admin-secure">
-            <ShieldCheck size={15} />
+          @media (max-width: 900px) {
+            .sportiva-admin-sidebar {
+              width: 72px !important;
+              padding-left: 9px !important;
+              padding-right: 9px !important;
+            }
 
-            <div>
-              <strong>
-                SECURE ACCESS
+            .sportiva-admin-brand-copy,
+            .sportiva-admin-nav-label,
+            .sportiva-admin-sidebar-bottom,
+            .sportiva-admin-nav-button span {
+              display: none !important;
+            }
+
+            .sportiva-admin-nav-button {
+              justify-content: center !important;
+              padding: 0 !important;
+            }
+
+            .sportiva-admin-nav-button b {
+              position: absolute !important;
+              top: 2px !important;
+              right: 2px !important;
+            }
+
+            .sportiva-admin-main {
+              width: calc(100% - 72px) !important;
+              margin-left: 72px !important;
+            }
+
+            .sportiva-admin-panel-grid {
+              grid-template-columns: 1fr !important;
+            }
+
+            .sportiva-admin-turf-grid {
+              grid-template-columns: 1fr 1fr !important;
+            }
+          }
+
+          @media (max-width: 650px) {
+            .sportiva-admin-main {
+              padding: 18px 12px 35px !important;
+            }
+
+            .sportiva-admin-header {
+              align-items: flex-start !important;
+            }
+
+            .sportiva-admin-header-title {
+              font-size: 24px !important;
+            }
+
+            .sportiva-admin-hero {
+              padding: 23px 20px !important;
+              flex-direction: column !important;
+            }
+
+            .sportiva-admin-stat-grid {
+              grid-template-columns: 1fr !important;
+            }
+
+            .sportiva-admin-turf-grid {
+              grid-template-columns: 1fr !important;
+            }
+
+            .sportiva-admin-toolbar {
+              flex-direction: column !important;
+              align-items: stretch !important;
+            }
+
+            .sportiva-admin-toolbar > * {
+              width: 100% !important;
+              max-width: none !important;
+            }
+
+            .sportiva-admin-form-grid {
+              grid-template-columns: 1fr !important;
+            }
+
+            .sportiva-admin-form-grid .full {
+              grid-column: auto !important;
+            }
+
+            .sportiva-admin-modal-actions {
+              flex-direction: column-reverse !important;
+            }
+
+            .sportiva-admin-modal-actions button {
+              width: 100% !important;
+            }
+          }
+
+          @media (max-width: 450px) {
+            .sportiva-admin-sidebar {
+              width: 62px !important;
+            }
+
+            .sportiva-admin-main {
+              width: calc(100% - 62px) !important;
+              margin-left: 62px !important;
+            }
+          }
+        `}
+      </style>
+
+      <div style={styles.page}>
+
+        {/* =====================================================
+            SIDEBAR
+        ===================================================== */}
+
+        <aside
+          className="sportiva-admin-sidebar"
+          style={styles.sidebar}
+        >
+
+          <div style={styles.brand}>
+
+            <div style={styles.brandMark}>
+              S
+            </div>
+
+            <div
+              className="sportiva-admin-brand-copy"
+              style={styles.brandCopy}
+            >
+              <strong style={styles.brandTitle}>
+                SPORTIVA
               </strong>
 
-              <span>
-                Sportiva Admin
+              <span
+                style={
+                  styles.brandSubtitle
+                }
+              >
+                ADMIN CONTROL
               </span>
+            </div>
+
+          </div>
+
+          <div
+            className="sportiva-admin-nav-label"
+            style={styles.navLabel}
+          >
+            MANAGEMENT
+          </div>
+
+          <nav style={styles.nav}>
+
+            {NAV.map((item) => {
+              const Icon = item.icon;
+
+              const active =
+                activeSection ===
+                item.id;
+
+              const badge =
+                item.id ===
+                "bookings"
+                  ? pendingBookings.length
+                  : item.id ===
+                    "coupons"
+                  ? activeCoupons
+                  : 0;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="sportiva-admin-nav-button"
+                  onClick={() =>
+                    setActiveSection(
+                      item.id
+                    )
+                  }
+                  style={{
+                    ...styles.navButton,
+                    ...(active
+                      ? styles.navActive
+                      : {}),
+                  }}
+                >
+                  <Icon size={17} />
+
+                  <span>
+                    {item.label}
+                  </span>
+
+                  {badge > 0 && (
+                    <b
+                      style={
+                        styles.navBadge
+                      }
+                    >
+                      {badge}
+                    </b>
+                  )}
+                </button>
+              );
+            })}
+
+          </nav>
+
+          <div
+            className="sportiva-admin-sidebar-bottom"
+            style={
+              styles.sidebarBottom
+            }
+          >
+            <div style={styles.secure}>
+              <ShieldCheck size={15} />
+
+              <div
+                style={styles.secureText}
+              >
+                <strong
+                  style={
+                    styles.secureTitle
+                  }
+                >
+                  SECURE ACCESS
+                </strong>
+
+                <span
+                  style={
+                    styles.secureSubtitle
+                  }
+                >
+                  Sportiva Admin
+                </span>
+              </div>
             </div>
           </div>
 
-        </div>
+        </aside>
 
-      </aside>
+        {/* =====================================================
+            MAIN
+        ===================================================== */}
 
-      {/* ======================================================
-          MAIN
-      ====================================================== */}
+        <main
+          className="sportiva-admin-main"
+          style={styles.main}
+        >
 
-      <main className="admin-main">
-
-        <header className="admin-header">
-
-          <div>
-            <span className="admin-header-label">
-              THE SPORTIVA
-            </span>
-
-            <h1>{navTitle}</h1>
-          </div>
-
-          <button
-            type="button"
-            className="admin-refresh-button"
-            onClick={() =>
-              loadData({ refresh: true })
-            }
-            disabled={refreshing}
+          <header
+            className="sportiva-admin-header"
+            style={styles.header}
           >
-            <RefreshCw
-              size={16}
-              className={
-                refreshing
-                  ? "admin-spin"
-                  : ""
-              }
-            />
+            <div>
 
-            {refreshing
-              ? "Refreshing..."
-              : "Refresh"}
-          </button>
+              <span
+                style={
+                  styles.headerEyebrow
+                }
+              >
+                THE SPORTIVA
+              </span>
 
-        </header>
+              <h1
+                className="sportiva-admin-header-title"
+                style={styles.headerTitle}
+              >
+                {activeNav.label}
+              </h1>
 
-        {message && (
-          <div className="admin-toast">
-            <Check size={15} />
-
-            <span>{message}</span>
+            </div>
 
             <button
               type="button"
-              onClick={() => setMessage("")}
+              onClick={() =>
+                loadData({
+                  refresh: true,
+                })
+              }
+              disabled={refreshing}
+              style={{
+                ...styles.refreshButton,
+                opacity: refreshing
+                  ? 0.6
+                  : 1,
+              }}
             >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* ======================================================
-            OVERVIEW
-        ====================================================== */}
-
-        {activeSection === "overview" && (
-          <section className="admin-content">
-
-            <div className="admin-welcome-panel">
-
-              <div>
-                <span>
-                  FACILITY OPERATIONS
-                </span>
-
-                <h2>
-                  Welcome to the
-                  <br />
-                  Sportiva control center.
-                </h2>
-
-                <p>
-                  Manage your facility,
-                  bookings, promotions and
-                  customer experience from
-                  one place.
-                </p>
-              </div>
-
-              <div className="admin-live-pill">
-                <span />
-                LIVE SYSTEM
-              </div>
-
-            </div>
-
-            <div className="admin-stat-grid">
-
-              <StatCard
-                icon={Trophy}
-                label="Active Turfs"
-                value={activeTurfs}
-                detail={`${turfs.length} total facilities`}
-              />
-
-              <StatCard
-                icon={ClipboardList}
-                label="Bookings"
-                value={bookings.length}
-                detail={`${pendingBookings.length} awaiting action`}
-              />
-
-              <StatCard
-                icon={Activity}
-                label="Revenue"
-                value={`৳${revenue.toLocaleString()}`}
-                detail="Confirmed bookings"
-              />
-
-              <StatCard
-                icon={Users}
-                label="Members"
-                value={users.length}
-                detail="Registered customers"
-              />
-
-            </div>
-
-            <div className="admin-overview-grid">
-
-              <div className="admin-panel">
-
-                <div className="admin-panel-header">
-
-                  <div>
-                    <span>BOOKING STATUS</span>
-                    <h3>
-                      Today's overview
-                    </h3>
-                  </div>
-
-                  <ClipboardList size={18} />
-
-                </div>
-
-                <div className="admin-overview-list">
-
-                  <div>
-                    <span>
-                      Pending
-                    </span>
-
-                    <strong>
-                      {pendingBookings.length}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>
-                      Confirmed
-                    </span>
-
-                    <strong>
-                      {confirmedBookings.length}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>
-                      Cancelled
-                    </span>
-
-                    <strong>
-                      {
-                        bookings.filter(
-                          (item) =>
-                            item.status ===
-                            "cancelled"
-                        ).length
+              <RefreshCw
+                size={15}
+                style={
+                  refreshing
+                    ? {
+                        animation:
+                          "sportivaSpin .8s linear infinite",
                       }
-                    </strong>
-                  </div>
+                    : undefined
+                }
+              />
 
+              Refresh
+            </button>
+
+          </header>
+
+          {message && (
+            <div style={styles.toast}>
+              <Check size={15} />
+
+              <span
+                style={{
+                  flex: 1,
+                }}
+              >
+                {message}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setMessage("")
+                }
+                style={{
+                  border: 0,
+                  background:
+                    "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* ===================================================
+              OVERVIEW
+          =================================================== */}
+
+          {activeSection ===
+            "overview" && (
+            <section
+              className="sportiva-admin-content"
+              style={styles.content}
+            >
+
+              <div
+                className="sportiva-admin-hero"
+                style={styles.hero}
+              >
+                <div>
+                  <span
+                    style={
+                      styles.heroEyebrow
+                    }
+                  >
+                    FACILITY OPERATIONS
+                  </span>
+
+                  <h2
+                    style={
+                      styles.heroTitle
+                    }
+                  >
+                    Control the
+                    <br />
+                    entire Sportiva.
+                  </h2>
+
+                  <p
+                    style={styles.heroText}
+                  >
+                    Manage facilities,
+                    bookings, customers,
+                    rewards and
+                    promotions from
+                    one clean control
+                    center.
+                  </p>
                 </div>
 
-              </div>
-
-              <div className="admin-panel">
-
-                <div className="admin-panel-header">
-
-                  <div>
-                    <span>PROMOTIONS</span>
-                    <h3>
-                      Coupon system
-                    </h3>
-                  </div>
-
-                  <TicketPercent
-                    size={18}
+                <div
+                  style={
+                    styles.livePill
+                  }
+                >
+                  <span
+                    style={
+                      styles.liveDot
+                    }
                   />
 
+                  LIVE SYSTEM
+                </div>
+              </div>
+
+              <div
+                className="sportiva-admin-stat-grid"
+                style={styles.statGrid}
+              >
+
+                <StatCard
+                  icon={Trophy}
+                  label="Active Turfs"
+                  value={activeTurfs}
+                  detail={`${turfs.length} total facilities`}
+                />
+
+                <StatCard
+                  icon={ClipboardList}
+                  label="Bookings"
+                  value={
+                    bookings.length
+                  }
+                  detail={`${pendingBookings.length} pending`}
+                />
+
+                <StatCard
+                  icon={Activity}
+                  label="Revenue"
+                  value={`৳${revenue.toLocaleString()}`}
+                  detail="Confirmed bookings"
+                />
+
+                <StatCard
+                  icon={Users}
+                  label="Members"
+                  value={
+                    users.length
+                  }
+                  detail="Registered customers"
+                />
+
+              </div>
+
+              <div
+                className="sportiva-admin-panel-grid"
+                style={styles.panelGrid}
+              >
+
+                <div style={styles.panel}>
+
+                  <div
+                    style={
+                      styles.panelHeader
+                    }
+                  >
+                    <div>
+                      <span
+                        style={
+                          styles.panelHeaderEyebrow
+                        }
+                      >
+                        BOOKING STATUS
+                      </span>
+
+                      <h3
+                        style={
+                          styles.panelHeaderTitle
+                        }
+                      >
+                        Reservation overview
+                      </h3>
+                    </div>
+
+                    <ClipboardList
+                      size={18}
+                      color="#6d8974"
+                    />
+                  </div>
+
+                  <div
+                    style={
+                      styles.simpleStats
+                    }
+                  >
+
+                    <div
+                      style={
+                        styles.simpleStat
+                      }
+                    >
+                      <span
+                        style={
+                          styles.simpleStatLabel
+                        }
+                      >
+                        Pending
+                      </span>
+
+                      <strong
+                        style={
+                          styles.simpleStatValue
+                        }
+                      >
+                        {
+                          pendingBookings.length
+                        }
+                      </strong>
+                    </div>
+
+                    <div
+                      style={
+                        styles.simpleStat
+                      }
+                    >
+                      <span
+                        style={
+                          styles.simpleStatLabel
+                        }
+                      >
+                        Confirmed
+                      </span>
+
+                      <strong
+                        style={
+                          styles.simpleStatValue
+                        }
+                      >
+                        {
+                          confirmedBookings.length
+                        }
+                      </strong>
+                    </div>
+
+                    <div
+                      style={
+                        styles.simpleStat
+                      }
+                    >
+                      <span
+                        style={
+                          styles.simpleStatLabel
+                        }
+                      >
+                        Cancelled
+                      </span>
+
+                      <strong
+                        style={
+                          styles.simpleStatValue
+                        }
+                      >
+                        {
+                          bookings.filter(
+                            (item) =>
+                              item.status ===
+                              "cancelled"
+                          ).length
+                        }
+                      </strong>
+                    </div>
+
+                  </div>
+
                 </div>
 
-                <div className="admin-promotion-summary">
+                <div style={styles.panel}>
 
-                  <strong>
-                    {activeCoupons}
-                  </strong>
+                  <div
+                    style={
+                      styles.panelHeader
+                    }
+                  >
+                    <div>
+                      <span
+                        style={
+                          styles.panelHeaderEyebrow
+                        }
+                      >
+                        PROMOTIONS
+                      </span>
 
-                  <span>
-                    active promotional codes
-                  </span>
+                      <h3
+                        style={
+                          styles.panelHeaderTitle
+                        }
+                      >
+                        Coupon system
+                      </h3>
+                    </div>
+
+                    <TicketPercent
+                      size={18}
+                      color="#6d8974"
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      paddingTop: 17,
+                    }}
+                  >
+                    <strong
+                      style={{
+                        display:
+                          "block",
+                        fontSize: 32,
+                        letterSpacing:
+                          "-0.04em",
+                      }}
+                    >
+                      {activeCoupons}
+                    </strong>
+
+                    <span
+                      style={{
+                        display:
+                          "block",
+                        marginTop: 4,
+                        color:
+                          COLORS.muted,
+                        fontSize: 10,
+                      }}
+                    >
+                      active promotional
+                      codes
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveSection(
+                          "coupons"
+                        )
+                      }
+                      style={{
+                        marginTop: 13,
+                        padding: 0,
+                        display:
+                          "inline-flex",
+                        alignItems:
+                          "center",
+                        border: 0,
+                        background:
+                          "transparent",
+                        color:
+                          COLORS.green2,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        cursor:
+                          "pointer",
+                      }}
+                    >
+                      Manage coupons
+                    </button>
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div
+                style={
+                  styles.recentPanel
+                }
+              >
+
+                <div
+                  style={
+                    styles.panelHeader
+                  }
+                >
+                  <div>
+                    <span
+                      style={
+                        styles.panelHeaderEyebrow
+                      }
+                    >
+                      RECENT ACTIVITY
+                    </span>
+
+                    <h3
+                      style={
+                        styles.panelHeaderTitle
+                      }
+                    >
+                      Latest bookings
+                    </h3>
+                  </div>
 
                   <button
                     type="button"
                     onClick={() =>
                       setActiveSection(
-                        "coupons"
+                        "bookings"
                       )
                     }
+                    style={{
+                      border: 0,
+                      background:
+                        "transparent",
+                      color:
+                        COLORS.green2,
+                      fontSize: 9,
+                      fontWeight: 800,
+                      cursor:
+                        "pointer",
+                    }}
                   >
-                    Manage coupons
-                    <ChevronRight
-                      size={14}
-                    />
+                    View all
                   </button>
-
                 </div>
-
-              </div>
-
-            </div>
-
-            <div className="admin-recent-panel">
-
-              <div className="admin-panel-header">
-
-                <div>
-                  <span>RECENT ACTIVITY</span>
-                  <h3>
-                    Latest bookings
-                  </h3>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveSection(
-                      "bookings"
-                    )
-                  }
-                >
-                  View all
-                  <ChevronRight
-                    size={14}
-                  />
-                </button>
-
-              </div>
-
-              <div className="admin-mini-list">
 
                 {bookings
                   .slice(0, 6)
                   .map((booking) => (
                     <div
-                      className="admin-mini-row"
                       key={booking.id}
+                      style={
+                        styles.recentRow
+                      }
                     >
 
-                      <div className="admin-mini-person">
-
-                        <div>
-                          {booking.profiles
+                      <div
+                        style={
+                          styles.person
+                        }
+                      >
+                        <div
+                          style={
+                            styles.avatar
+                          }
+                        >
+                          {booking
+                            .profiles
                             ?.full_name
                             ?.charAt(0)
                             ?.toUpperCase() ||
                             "U"}
                         </div>
 
-                        <span>
-                          {
-                            booking.profiles
-                              ?.full_name ||
-                            "Unknown User"
+                        <span
+                          style={
+                            styles.personName
                           }
+                        >
+                          {booking
+                            .profiles
+                            ?.full_name ||
+                            "Unknown User"}
                         </span>
-
                       </div>
 
-                      <span>
-                        {booking.turfs?.name ||
+                      <span
+                        style={{
+                          color:
+                            "#707a73",
+                          fontSize: 10,
+                        }}
+                      >
+                        {booking
+                          .turfs?.name ||
                           "Turf"}
                       </span>
 
-                      <strong>
+                      <strong
+                        style={{
+                          fontSize: 10,
+                        }}
+                      >
                         ৳
                         {Number(
                           booking.total_amount ||
@@ -1902,7 +3474,7 @@ export default function Admin() {
                         ).toLocaleString()}
                       </strong>
 
-                      <StatusBadge
+                      <Status
                         type={
                           booking.status ===
                           "confirmed"
@@ -1914,568 +3486,1041 @@ export default function Admin() {
                         }
                       >
                         {booking.status}
-                      </StatusBadge>
+                      </Status>
 
                     </div>
                   ))}
 
-                {bookings.length === 0 && (
-                  <div className="admin-empty-small">
+                {bookings.length ===
+                  0 && (
+                  <div
+                    style={{
+                      padding: 28,
+                      textAlign:
+                        "center",
+                      color:
+                        COLORS.muted,
+                      fontSize: 10,
+                    }}
+                  >
                     No bookings yet.
                   </div>
                 )}
 
               </div>
 
-            </div>
+            </section>
+          )}
 
-          </section>
-        )}
+          {/* ===================================================
+              TURFS
+          =================================================== */}
 
-        {/* ======================================================
-            TURFS
-        ====================================================== */}
+          {activeSection ===
+            "turfs" && (
+            <section
+              className="sportiva-admin-content"
+              style={styles.content}
+            >
 
-        {activeSection === "turfs" && (
-          <section className="admin-content">
-
-            <div className="admin-page-title-row">
-
-              <div>
-                <span>FACILITY MANAGEMENT</span>
-                <h2>Turfs</h2>
-              </div>
-
-              <button
-                type="button"
-                className="admin-primary-button"
-                onClick={createTurf}
-              >
-                <Plus size={16} />
-                Add Turf
-              </button>
-
-            </div>
-
-            <div className="admin-toolbar">
-
-              <div className="admin-search-box">
-                <Search size={16} />
-
-                <input
-                  type="text"
-                  placeholder="Search turfs..."
-                  value={turfSearch}
-                  onChange={(event) =>
-                    setTurfSearch(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-
-              <span>
-                {filteredTurfs.length} facilities
-              </span>
-
-            </div>
-
-            <div className="admin-turf-grid">
-
-              {filteredTurfs.map((turf) => (
-                <article
-                  className="admin-turf-card"
-                  key={turf.id}
-                >
-
-                  <div className="admin-turf-visual">
-
-                    {turf.image_url ? (
-                      <img
-                        src={turf.image_url}
-                        alt={turf.name}
-                      />
-                    ) : (
-                      <div className="admin-turf-placeholder">
-                        <Trophy size={28} />
-                      </div>
-                    )}
-
-                    <span
-                      className={
-                        turf.is_active
-                          ? "active"
-                          : ""
-                      }
-                    >
-                      {turf.is_active
-                        ? "ACTIVE"
-                        : "DISABLED"}
-                    </span>
-
-                  </div>
-
-                  <div className="admin-turf-card-body">
-
-                    <div>
-                      <small>
-                        SPORTIVA FACILITY
-                      </small>
-
-                      <h3>
-                        {turf.name}
-                      </h3>
-
-                      <p>
-                        {turf.description ||
-                          "No description provided."}
-                      </p>
-                    </div>
-
-                    <div className="admin-turf-price">
-                      <strong>
-                        ৳
-                        {Number(
-                          turf.price_per_hour
-                        ).toLocaleString()}
-                      </strong>
-
-                      <span>/ hour</span>
-                    </div>
-
-                    <div className="admin-inline-actions">
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editTurf(turf)
-                        }
-                      >
-                        <Edit3 size={14} />
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleTurf(turf)
-                        }
-                      >
-                        {turf.is_active ? (
-                          <X size={14} />
-                        ) : (
-                          <Check size={14} />
-                        )}
-
-                        {turf.is_active
-                          ? "Disable"
-                          : "Enable"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger"
-                        onClick={() =>
-                          deleteTurf(turf)
-                        }
-                      >
-                        <Trash2 size={14} />
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </article>
-              ))}
-
-            </div>
-
-            {filteredTurfs.length === 0 && (
-              <div className="admin-empty">
-                <Trophy size={28} />
-                <strong>
-                  No turfs found.
-                </strong>
-                <span>
-                  Add a facility to start
-                  accepting bookings.
-                </span>
-              </div>
-            )}
-
-          </section>
-        )}
-
-        {/* ======================================================
-            TIME SLOTS
-        ====================================================== */}
-
-        {activeSection === "slots" && (
-          <section className="admin-content">
-
-            <div className="admin-page-title-row">
-
-              <div>
-                <span>
-                  AVAILABILITY MANAGEMENT
-                </span>
-
-                <h2>
-                  Time Slots
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                className="admin-primary-button"
-                onClick={createSlot}
-              >
-                <Plus size={16} />
-                Add Slot
-              </button>
-
-            </div>
-
-            <div className="admin-toolbar admin-toolbar-grid">
-
-              <div className="admin-search-box">
-                <Search size={16} />
-
-                <input
-                  type="text"
-                  placeholder="Search turf..."
-                  value={slotSearch}
-                  onChange={(event) =>
-                    setSlotSearch(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-
-              <select
-                value={slotTurf}
-                onChange={(event) =>
-                  setSlotTurf(
-                    event.target.value
-                  )
-                }
-              >
-                <option value="all">
-                  All turfs
-                </option>
-
-                {turfs.map((turf) => (
-                  <option
-                    key={turf.id}
-                    value={turf.id}
-                  >
-                    {turf.name}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="date"
-                value={slotDate}
-                onChange={(event) =>
-                  setSlotDate(
-                    event.target.value
-                  )
-                }
-              />
-
-              <button
-                type="button"
-                className="admin-clear-button"
-                onClick={() => {
-                  setSlotSearch("");
-                  setSlotTurf("all");
-                  setSlotDate("");
+              <div
+                style={{
+                  display: "flex",
+                  alignItems:
+                    "flex-end",
+                  justifyContent:
+                    "space-between",
+                  gap: 20,
+                  marginBottom: 19,
                 }}
               >
-                Clear
-              </button>
+                <div>
+                  <span
+                    style={
+                      styles.headerEyebrow
+                    }
+                  >
+                    FACILITY MANAGEMENT
+                  </span>
 
-            </div>
+                  <h2
+                    style={{
+                      margin: "5px 0 0",
+                      fontSize: 26,
+                      letterSpacing:
+                        "-0.04em",
+                    }}
+                  >
+                    Turfs
+                  </h2>
+                </div>
 
-            <div className="admin-table-card">
+                <button
+                  type="button"
+                  onClick={
+                    openCreateTurf
+                  }
+                  style={
+                    styles.refreshButton
+                  }
+                >
+                  <Plus size={15} />
+                  Add Turf
+                </button>
+              </div>
 
-              <div className="admin-table-scroll">
+              <div
+                className="sportiva-admin-toolbar"
+                style={
+                  styles.toolbar
+                }
+              >
+                <div
+                  style={styles.search}
+                >
+                  <Search size={15} />
 
-                <table className="admin-table">
+                  <input
+                    value={turfSearch}
+                    onChange={(e) =>
+                      setTurfSearch(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Search turfs..."
+                    style={
+                      styles.searchInput
+                    }
+                  />
+                </div>
 
-                  <thead>
-                    <tr>
-                      <th>Turf</th>
-                      <th>Date</th>
-                      <th>Time</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
+                <span
+                  style={{
+                    marginLeft:
+                      "auto",
+                    color:
+                      COLORS.muted,
+                    fontSize: 9,
+                  }}
+                >
+                  {
+                    filteredTurfs.length
+                  }{" "}
+                  facilities
+                </span>
+              </div>
 
-                  <tbody>
+              <div
+                className="sportiva-admin-turf-grid"
+                style={styles.turfGrid}
+              >
 
-                    {filteredSlots.map((slot) => (
-                      <tr key={slot.id}>
+                {filteredTurfs.map(
+                  (turf) => (
+                    <article
+                      className="sportiva-admin-turf"
+                      key={turf.id}
+                      style={{
+                        ...styles.turfCard,
+                        transition:
+                          "transform .2s ease, box-shadow .2s ease",
+                      }}
+                    >
 
-                        <td>
-                          <strong>
-                            {slot.turfs?.name ||
-                              "Unknown Turf"}
-                          </strong>
-                        </td>
+                      <div
+                        style={
+                          styles.turfImage
+                        }
+                      >
 
-                        <td>
-                          {formatDate(
-                            slot.slot_date
-                          )}
-                        </td>
-
-                        <td>
-                          <div className="admin-time-value">
-                            <Clock3
-                              size={14}
+                        {turf.image_url ? (
+                          <img
+                            src={
+                              turf.image_url
+                            }
+                            alt={
+                              turf.name
+                            }
+                            style={
+                              styles.turfImg
+                            }
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              height:
+                                "100%",
+                              display:
+                                "grid",
+                              placeItems:
+                                "center",
+                              color:
+                                "#6d8f76",
+                            }}
+                          >
+                            <Trophy
+                              size={28}
                             />
-
-                            {formatTime(
-                              slot.start_time
-                            )}
-
-                            <span>
-                              —
-                            </span>
-
-                            {formatTime(
-                              slot.end_time
-                            )}
                           </div>
-                        </td>
+                        )}
 
-                        <td>
-                          <StatusBadge
-                            type={
-                              slot.is_available
-                                ? "success"
-                                : "neutral"
+                        <span
+                          style={{
+                            position:
+                              "absolute",
+                            top: 11,
+                            right: 11,
+                            padding:
+                              "6px 8px",
+                            borderRadius:
+                              99,
+                            background:
+                              turf.is_active
+                                ? "rgba(28,88,45,.84)"
+                                : "rgba(28,38,31,.65)",
+                            color:
+                              "#fff",
+                            fontSize: 7,
+                            fontWeight:
+                              900,
+                          }}
+                        >
+                          {turf.is_active
+                            ? "ACTIVE"
+                            : "DISABLED"}
+                        </span>
+
+                      </div>
+
+                      <div
+                        style={
+                          styles.turfBody
+                        }
+                      >
+                        <span
+                          style={
+                            styles.turfEyebrow
+                          }
+                        >
+                          SPORTIVA
+                          FACILITY
+                        </span>
+
+                        <h3
+                          style={
+                            styles.turfTitle
+                          }
+                        >
+                          {turf.name}
+                        </h3>
+
+                        <p
+                          style={
+                            styles.turfDescription
+                          }
+                        >
+                          {turf.description ||
+                            "No description provided."}
+                        </p>
+
+                        <div
+                          style={
+                            styles.turfPrice
+                          }
+                        >
+                          <strong
+                            style={
+                              styles.turfPriceValue
                             }
                           >
-                            {slot.is_available
-                              ? "Available"
-                              : "Disabled"}
-                          </StatusBadge>
-                        </td>
+                            ৳
+                            {Number(
+                              turf.price_per_hour
+                            ).toLocaleString()}
+                          </strong>
 
-                        <td>
-                          <div className="admin-row-actions">
+                          <span
+                            style={
+                              styles.turfPriceUnit
+                            }
+                          >
+                            / hour
+                          </span>
+                        </div>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                editSlot(
-                                  slot
-                                )
-                              }
-                            >
-                              <Edit3 size={14} />
-                            </button>
+                        <div
+                          style={
+                            styles.inlineButtons
+                          }
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditTurf(
+                                turf
+                              )
+                            }
+                            style={
+                              styles.inlineButton
+                            }
+                          >
+                            <Edit3
+                              size={13}
+                            />
+                            Edit
+                          </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                toggleSlot(
-                                  slot
-                                )
-                              }
-                            >
-                              {slot.is_available ? (
-                                <X size={14} />
-                              ) : (
-                                <Check
-                                  size={14}
-                                />
-                              )}
-                            </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleTurf(
+                                turf
+                              )
+                            }
+                            style={
+                              styles.inlineButton
+                            }
+                          >
+                            {turf.is_active ? (
+                              <X
+                                size={13}
+                              />
+                            ) : (
+                              <Check
+                                size={13}
+                              />
+                            )}
 
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() =>
-                                deleteSlot(
-                                  slot
-                                )
-                              }
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            {turf.is_active
+                              ? "Disable"
+                              : "Enable"}
+                          </button>
 
-                          </div>
-                        </td>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              deleteTurf(
+                                turf
+                              )
+                            }
+                            style={{
+                              ...styles.inlineButton,
+                              flex:
+                                "0 0 37px",
+                              color:
+                                COLORS.danger,
+                            }}
+                          >
+                            <Trash2
+                              size={13}
+                            />
+                          </button>
+                        </div>
+                      </div>
 
-                      </tr>
-                    ))}
-
-                  </tbody>
-
-                </table>
+                    </article>
+                  )
+                )}
 
               </div>
 
-              {filteredSlots.length === 0 && (
-                <div className="admin-table-empty">
-                  No slots match your filters.
+              {filteredTurfs.length ===
+                0 && (
+                <div
+                  style={styles.empty}
+                >
+                  <Trophy size={27} />
+
+                  <strong
+                    style={
+                      styles.emptyTitle
+                    }
+                  >
+                    No turfs found.
+                  </strong>
+
+                  <span
+                    style={
+                      styles.emptyText
+                    }
+                  >
+                    Add your first
+                    facility.
+                  </span>
                 </div>
               )}
 
-            </div>
+            </section>
+          )}
 
-          </section>
-        )}
+          {/* ===================================================
+              SLOTS
+          =================================================== */}
 
-        {/* ======================================================
-            BOOKINGS
-        ====================================================== */}
+          {activeSection ===
+            "slots" && (
+            <section
+              style={styles.content}
+            >
 
-        {activeSection === "bookings" && (
-          <section className="admin-content">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "flex-end",
+                  gap: 20,
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <span
+                    style={
+                      styles.headerEyebrow
+                    }
+                  >
+                    AVAILABILITY
+                    MANAGEMENT
+                  </span>
 
-            <div className="admin-page-title-row">
+                  <h2
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      fontSize: 26,
+                    }}
+                  >
+                    Time Slots
+                  </h2>
+                </div>
 
-              <div>
-                <span>
-                  RESERVATION MANAGEMENT
-                </span>
-
-                <h2>
-                  Bookings
-                </h2>
-              </div>
-
-              <span className="admin-page-counter">
-                {bookings.length} TOTAL
-              </span>
-
-            </div>
-
-            <div className="admin-toolbar">
-
-              <div className="admin-search-box">
-                <Search size={16} />
-
-                <input
-                  type="text"
-                  placeholder="Search customer or turf..."
-                  value={bookingSearch}
-                  onChange={(event) =>
-                    setBookingSearch(
-                      event.target.value
-                    )
+                <button
+                  type="button"
+                  onClick={
+                    openCreateSlot
                   }
-                />
+                  style={
+                    styles.refreshButton
+                  }
+                >
+                  <Plus size={15} />
+                  Add Slot
+                </button>
               </div>
 
-              <select
-                value={bookingStatus}
-                onChange={(event) =>
-                  setBookingStatus(
-                    event.target.value
-                  )
+              <div
+                className="sportiva-admin-toolbar"
+                style={
+                  styles.toolbar
                 }
               >
-                <option value="all">
-                  All statuses
-                </option>
+                <div
+                  style={styles.search}
+                >
+                  <Search size={15} />
 
-                <option value="pending">
-                  Pending
-                </option>
+                  <input
+                    value={slotSearch}
+                    onChange={(e) =>
+                      setSlotSearch(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Search turf..."
+                    style={
+                      styles.searchInput
+                    }
+                  />
+                </div>
 
-                <option value="confirmed">
-                  Confirmed
-                </option>
+                <select
+                  value={slotTurf}
+                  onChange={(e) =>
+                    setSlotTurf(
+                      e.target.value
+                    )
+                  }
+                  style={
+                    styles.filter
+                  }
+                >
+                  <option value="all">
+                    All Turfs
+                  </option>
 
-                <option value="cancelled">
-                  Cancelled
-                </option>
-              </select>
+                  {turfs.map(
+                    (turf) => (
+                      <option
+                        key={turf.id}
+                        value={turf.id}
+                      >
+                        {turf.name}
+                      </option>
+                    )
+                  )}
+                </select>
 
-            </div>
+                <input
+                  type="date"
+                  value={slotDate}
+                  onChange={(e) =>
+                    setSlotDate(
+                      e.target.value
+                    )
+                  }
+                  style={
+                    styles.filter
+                  }
+                />
 
-            <div className="admin-table-card">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSlotSearch("");
+                    setSlotTurf("all");
+                    setSlotDate("");
+                  }}
+                  style={
+                    styles.refreshButton
+                  }
+                >
+                  Clear
+                </button>
+              </div>
 
-              <div className="admin-table-scroll">
+              <div
+                style={
+                  styles.tableCard
+                }
+              >
+                <div
+                  style={
+                    styles.tableWrap
+                  }
+                >
+                  <table
+                    className="sportiva-admin-table"
+                    style={
+                      styles.table
+                    }
+                  >
+                    <thead>
+                      <tr>
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Turf
+                        </th>
 
-                <table className="admin-table">
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Date
+                        </th>
 
-                  <thead>
-                    <tr>
-                      <th>Customer</th>
-                      <th>Turf</th>
-                      <th>Schedule</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Time
+                        </th>
 
-                  <tbody>
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Status
+                        </th>
 
-                    {filteredBookings.map(
-                      (booking) => (
-                        <tr key={booking.id}>
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
 
-                          <td>
-                            <div className="admin-person">
-
-                              <div>
-                                {booking
-                                  .profiles
-                                  ?.full_name
-                                  ?.charAt(0)
-                                  ?.toUpperCase() ||
-                                  "U"}
-                              </div>
-
-                              <section>
-                                <strong>
-                                  {booking
-                                    .profiles
-                                    ?.full_name ||
-                                    "Unknown User"}
-                                </strong>
-
-                                <small>
-                                  {booking
-                                    .profiles
-                                    ?.email ||
-                                    booking
-                                      .profiles
-                                      ?.phone ||
-                                    "No contact"}
-                                </small>
-                              </section>
-
-                            </div>
-                          </td>
-
-                          <td>
-                            {booking
-                              .turfs?.name ||
-                              "Unknown Turf"}
-                          </td>
-
-                          <td>
-                            <div className="admin-schedule">
-
+                    <tbody>
+                      {filteredSlots.map(
+                        (slot) => (
+                          <tr
+                            key={
+                              slot.id
+                            }
+                          >
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
                               <strong>
+                                {slot
+                                  .turfs
+                                  ?.name ||
+                                  "Unknown Turf"}
+                              </strong>
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              {formatDate(
+                                slot.slot_date
+                              )}
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <div
+                                style={{
+                                  display:
+                                    "flex",
+                                  alignItems:
+                                    "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <Clock3
+                                  size={13}
+                                />
+
+                                {formatTime(
+                                  slot.start_time
+                                )}
+
+                                —
+
+                                {formatTime(
+                                  slot.end_time
+                                )}
+                              </div>
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <Status
+                                type={
+                                  slot.is_available
+                                    ? "success"
+                                    : "neutral"
+                                }
+                              >
+                                {slot.is_available
+                                  ? "Available"
+                                  : "Disabled"}
+                              </Status>
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <div
+                                style={
+                                  styles.actions
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openEditSlot(
+                                      slot
+                                    )
+                                  }
+                                  style={
+                                    styles.iconButton
+                                  }
+                                >
+                                  <Edit3
+                                    size={
+                                      13
+                                    }
+                                  />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleSlot(
+                                      slot
+                                    )
+                                  }
+                                  style={
+                                    styles.iconButton
+                                  }
+                                >
+                                  {slot.is_available ? (
+                                    <X
+                                      size={
+                                        13
+                                      }
+                                    />
+                                  ) : (
+                                    <Check
+                                      size={
+                                        13
+                                      }
+                                    />
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    deleteSlot(
+                                      slot
+                                    )
+                                  }
+                                  style={{
+                                    ...styles.iconButton,
+                                    color:
+                                      COLORS.danger,
+                                  }}
+                                >
+                                  <Trash2
+                                    size={
+                                      13
+                                    }
+                                  />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {filteredSlots.length ===
+                  0 && (
+                  <div
+                    style={
+                      styles.empty
+                    }
+                  >
+                    No matching time
+                    slots.
+                  </div>
+                )}
+              </div>
+
+            </section>
+          )}
+
+          {/* ===================================================
+              BOOKINGS
+          =================================================== */}
+
+          {activeSection ===
+            "bookings" && (
+            <section
+              style={styles.content}
+            >
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "flex-end",
+                  gap: 20,
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <span
+                    style={
+                      styles.headerEyebrow
+                    }
+                  >
+                    RESERVATION
+                    MANAGEMENT
+                  </span>
+
+                  <h2
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      fontSize: 26,
+                    }}
+                  >
+                    Bookings
+                  </h2>
+                </div>
+
+                <span
+                  style={{
+                    color:
+                      COLORS.muted,
+                    fontSize: 9,
+                    fontWeight: 800,
+                  }}
+                >
+                  {bookings.length} TOTAL
+                </span>
+              </div>
+
+              <div
+                className="sportiva-admin-toolbar"
+                style={
+                  styles.toolbar
+                }
+              >
+                <div
+                  style={styles.search}
+                >
+                  <Search size={15} />
+
+                  <input
+                    value={
+                      bookingSearch
+                    }
+                    onChange={(e) =>
+                      setBookingSearch(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Search customer or turf..."
+                    style={
+                      styles.searchInput
+                    }
+                  />
+                </div>
+
+                <select
+                  value={
+                    bookingStatus
+                  }
+                  onChange={(e) =>
+                    setBookingStatus(
+                      e.target.value
+                    )
+                  }
+                  style={
+                    styles.filter
+                  }
+                >
+                  <option value="all">
+                    All Statuses
+                  </option>
+
+                  <option value="pending">
+                    Pending
+                  </option>
+
+                  <option value="confirmed">
+                    Confirmed
+                  </option>
+
+                  <option value="cancelled">
+                    Cancelled
+                  </option>
+                </select>
+              </div>
+
+              <div
+                style={
+                  styles.tableCard
+                }
+              >
+                <div
+                  style={
+                    styles.tableWrap
+                  }
+                >
+                  <table
+                    style={
+                      styles.table
+                    }
+                  >
+                    <thead>
+                      <tr>
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Customer
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Turf
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Schedule
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Amount
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Status
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredBookings.map(
+                        (booking) => (
+                          <tr
+                            key={
+                              booking.id
+                            }
+                          >
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <div
+                                style={
+                                  styles.person
+                                }
+                              >
+                                <div
+                                  style={
+                                    styles.avatar
+                                  }
+                                >
+                                  {booking
+                                    .profiles
+                                    ?.full_name
+                                    ?.charAt(
+                                      0
+                                    )
+                                    ?.toUpperCase() ||
+                                    "U"}
+                                </div>
+
+                                <div
+                                  style={{
+                                    minWidth:
+                                      0,
+                                  }}
+                                >
+                                  <strong
+                                    style={{
+                                      display:
+                                        "block",
+                                      color:
+                                        COLORS.text,
+                                      fontSize: 10,
+                                    }}
+                                  >
+                                    {booking
+                                      .profiles
+                                      ?.full_name ||
+                                      "Unknown User"}
+                                  </strong>
+
+                                  <small
+                                    style={{
+                                      display:
+                                        "block",
+                                      marginTop:
+                                        3,
+                                      color:
+                                        "#8a938c",
+                                      fontSize: 8,
+                                    }}
+                                  >
+                                    {booking
+                                      .profiles
+                                      ?.email ||
+                                      booking
+                                        .profiles
+                                        ?.phone ||
+                                      "No contact"}
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              {booking
+                                .turfs
+                                ?.name ||
+                                "Unknown Turf"}
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <strong
+                                style={{
+                                  display:
+                                    "block",
+                                  fontSize: 10,
+                                }}
+                              >
                                 {formatDate(
                                   booking.booking_date
                                 )}
                               </strong>
 
-                              <small>
+                              <small
+                                style={{
+                                  display:
+                                    "block",
+                                  marginTop:
+                                    3,
+                                  color:
+                                    "#89928b",
+                                  fontSize: 9,
+                                }}
+                              >
                                 {formatTime(
                                   booking.start_time
                                 )}{" "}
@@ -2484,1183 +4529,2036 @@ export default function Admin() {
                                   booking.end_time
                                 )}
                               </small>
+                            </td>
 
-                            </div>
-                          </td>
-
-                          <td>
-                            <strong>
-                              ৳
-                              {Number(
-                                booking.total_amount ||
-                                  0
-                              ).toLocaleString()}
-                            </strong>
-                          </td>
-
-                          <td>
-
-                            <StatusBadge
-                              type={
-                                booking.status ===
-                                "confirmed"
-                                  ? "success"
-                                  : booking.status ===
-                                    "pending"
-                                  ? "warning"
-                                  : "danger"
+                            <td
+                              style={
+                                styles.td
                               }
                             >
-                              {booking.status}
-                            </StatusBadge>
+                              <strong>
+                                ৳
+                                {Number(
+                                  booking.total_amount ||
+                                    0
+                                ).toLocaleString()}
+                              </strong>
+                            </td>
 
-                          </td>
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <Status
+                                type={
+                                  booking.status ===
+                                  "confirmed"
+                                    ? "success"
+                                    : booking.status ===
+                                      "pending"
+                                    ? "warning"
+                                    : "danger"
+                                }
+                              >
+                                {booking.status}
+                              </Status>
+                            </td>
 
-                          <td>
-
-                            {booking.status ===
-                            "pending" ? (
-                              <div className="admin-row-actions">
-
-                                <button
-                                  type="button"
-                                  className="success"
-                                  onClick={() =>
-                                    setBookingStatus(
-                                      booking,
-                                      "confirmed"
-                                    )
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              {booking.status ===
+                                "pending" && (
+                                <div
+                                  style={
+                                    styles.actions
                                   }
-                                  title="Confirm booking"
                                 >
-                                  <Check size={14} />
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateBooking(
+                                        booking,
+                                        "confirmed"
+                                      )
+                                    }
+                                    style={{
+                                      ...styles.iconButton,
+                                      color:
+                                        COLORS.success,
+                                    }}
+                                  >
+                                    <Check
+                                      size={
+                                        13
+                                      }
+                                    />
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  className="danger"
-                                  onClick={() =>
-                                    setBookingStatus(
-                                      booking,
-                                      "cancelled"
-                                    )
-                                  }
-                                  title="Cancel booking"
-                                >
-                                  <X size={14} />
-                                </button>
-
-                              </div>
-                            ) : (
-                              <span className="admin-muted">
-                                {formatDateTime(
-                                  booking.created_at
-                                )}
-                              </span>
-                            )}
-
-                          </td>
-
-                        </tr>
-                      )
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-              {filteredBookings.length ===
-                0 && (
-                <div className="admin-table-empty">
-                  No bookings found.
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateBooking(
+                                        booking,
+                                        "cancelled"
+                                      )
+                                    }
+                                    style={{
+                                      ...styles.iconButton,
+                                      color:
+                                        COLORS.danger,
+                                    }}
+                                  >
+                                    <X
+                                      size={
+                                        13
+                                      }
+                                    />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
 
-            </div>
-
-          </section>
-        )}
-
-        {/* ======================================================
-            USERS
-        ====================================================== */}
-
-        {activeSection === "users" && (
-          <section className="admin-content">
-
-            <div className="admin-page-title-row">
-
-              <div>
-                <span>
-                  CUSTOMER MANAGEMENT
-                </span>
-
-                <h2>Users</h2>
-              </div>
-
-              <span className="admin-page-counter">
-                {users.length} MEMBERS
-              </span>
-
-            </div>
-
-            <div className="admin-toolbar">
-
-              <div className="admin-search-box">
-                <Search size={16} />
-
-                <input
-                  type="text"
-                  placeholder="Search member..."
-                  value={userSearch}
-                  onChange={(event) =>
-                    setUserSearch(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-
-            </div>
-
-            <div className="admin-table-card">
-
-              <div className="admin-table-scroll">
-
-                <table className="admin-table">
-
-                  <thead>
-                    <tr>
-                      <th>Member</th>
-                      <th>Phone</th>
-                      <th>Email</th>
-                      <th>Joined</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-
-                    {filteredUsers.map(
-                      (user) => (
-                        <tr key={user.id}>
-
-                          <td>
-                            <div className="admin-person">
-
-                              <div>
-                                {user.full_name
-                                  ?.charAt(0)
-                                  ?.toUpperCase() ||
-                                  "U"}
-                              </div>
-
-                              <section>
-                                <strong>
-                                  {user.full_name ||
-                                    "Unnamed"}
-                                </strong>
-
-                                <small>
-                                  ID:{" "}
-                                  {user.id.slice(
-                                    0,
-                                    8
-                                  )}
-                                </small>
-                              </section>
-
-                            </div>
-                          </td>
-
-                          <td>
-                            {user.phone || "—"}
-                          </td>
-
-                          <td>
-                            {user.email || "—"}
-                          </td>
-
-                          <td>
-                            {formatDateTime(
-                              user.created_at
-                            )}
-                          </td>
-
-                        </tr>
-                      )
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            </div>
-
-          </section>
-        )}
-
-        {/* ======================================================
-            REWARDS
-        ====================================================== */}
-
-        {activeSection === "rewards" && (
-          <section className="admin-content">
-
-            <div className="admin-page-title-row">
-
-              <div>
-                <span>
-                  CUSTOMER LOYALTY
-                </span>
-
-                <h2>
-                  Sportiva Rewards
-                </h2>
-              </div>
-
-            </div>
-
-            <div className="admin-stat-grid">
-
-              <StatCard
-                icon={Users}
-                label="Reward Members"
-                value={memberRewards.length}
-                detail="Active reward accounts"
-              />
-
-              <StatCard
-                icon={Gift}
-                label="Current Points"
-                value={currentPoints.toLocaleString()}
-                detail="Customer balance"
-              />
-
-              <StatCard
-                icon={Trophy}
-                label="Milestones"
-                value={
-                  rewardCheckpoints.length
-                }
-                detail="Configured checkpoints"
-              />
-
-              <StatCard
-                icon={Gift}
-                label="Reward Offers"
-                value={
-                  communityOffers.filter(
-                    (item) =>
-                      item.is_active
-                  ).length
-                }
-                detail="Active redemption offers"
-              />
-
-            </div>
-
-            <div className="admin-segmented-tabs">
-
-              <button
-                type="button"
-                className={
-                  rewardSection === "members"
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setRewardSection(
-                    "members"
-                  )
-                }
-              >
-                Members
-              </button>
-
-              <button
-                type="button"
-                className={
-                  rewardSection === "milestones"
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setRewardSection(
-                    "milestones"
-                  )
-                }
-              >
-                Milestones
-              </button>
-
-              <button
-                type="button"
-                className={
-                  rewardSection === "offers"
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setRewardSection(
-                    "offers"
-                  )
-                }
-              >
-                Offers
-              </button>
-
-              <button
-                type="button"
-                className={
-                  rewardSection === "history"
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setRewardSection(
-                    "history"
-                  )
-                }
-              >
-                History
-              </button>
-
-            </div>
-
-            {rewardSection ===
-              "members" && (
-              <div className="admin-table-card">
-
-                <div className="admin-toolbar embedded">
-
-                  <div className="admin-search-box">
-                    <Search size={16} />
-
-                    <input
-                      type="text"
-                      placeholder="Search reward members..."
-                      onChange={(event) => {
-                        // Visual search is intentionally
-                        // kept simple in this clean panel.
-                        void event;
-                      }}
-                    />
+                {filteredBookings.length ===
+                  0 && (
+                  <div
+                    style={
+                      styles.empty
+                    }
+                  >
+                    No bookings found.
                   </div>
+                )}
+              </div>
 
+            </section>
+          )}
+
+          {/* ===================================================
+              USERS
+          =================================================== */}
+
+          {activeSection ===
+            "users" && (
+            <section
+              style={styles.content}
+            >
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems:
+                    "flex-end",
+                  justifyContent:
+                    "space-between",
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <span
+                    style={
+                      styles.headerEyebrow
+                    }
+                  >
+                    CUSTOMER MANAGEMENT
+                  </span>
+
+                  <h2
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      fontSize: 26,
+                    }}
+                  >
+                    Users
+                  </h2>
                 </div>
 
-                <div className="admin-table-scroll">
+                <span
+                  style={{
+                    color:
+                      COLORS.muted,
+                    fontSize: 9,
+                    fontWeight: 800,
+                  }}
+                >
+                  {users.length} MEMBERS
+                </span>
+              </div>
 
-                  <table className="admin-table">
+              <div
+                style={
+                  styles.toolbar
+                }
+              >
+                <div
+                  style={styles.search}
+                >
+                  <Search size={15} />
 
+                  <input
+                    value={userSearch}
+                    onChange={(e) =>
+                      setUserSearch(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Search name, email or phone..."
+                    style={
+                      styles.searchInput
+                    }
+                  />
+                </div>
+              </div>
+
+              <div
+                style={
+                  styles.tableCard
+                }
+              >
+                <div
+                  style={
+                    styles.tableWrap
+                  }
+                >
+                  <table
+                    style={
+                      styles.table
+                    }
+                  >
                     <thead>
                       <tr>
-                        <th>Member</th>
-                        <th>Points</th>
-                        <th>Lifetime</th>
-                        <th>Updated</th>
-                        <th />
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Member
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Phone
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Email
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Joined
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
+                      {filteredUsers.map(
+                        (user) => (
+                          <tr
+                            key={
+                              user.id
+                            }
+                          >
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              <div
+                                style={
+                                  styles.person
+                                }
+                              >
+                                <div
+                                  style={
+                                    styles.avatar
+                                  }
+                                >
+                                  {user
+                                    .full_name
+                                    ?.charAt(
+                                      0
+                                    )
+                                    ?.toUpperCase() ||
+                                    "U"}
+                                </div>
 
-                      {memberRewards.map(
-                        (member) => {
-                          const user =
-                            users.find(
-                              (item) =>
-                                item.id ===
-                                member.user_id
+                                <div>
+                                  <strong
+                                    style={{
+                                      fontSize:
+                                        10,
+                                    }}
+                                  >
+                                    {user.full_name ||
+                                      "Unnamed Member"}
+                                  </strong>
+
+                                  <small
+                                    style={{
+                                      display:
+                                        "block",
+                                      marginTop:
+                                        3,
+                                      color:
+                                        "#8c958e",
+                                      fontSize: 8,
+                                    }}
+                                  >
+                                    ID:{" "}
+                                    {user.id.slice(
+                                      0,
+                                      8
+                                    )}
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              {user.phone ||
+                                "—"}
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              {user.email ||
+                                "—"}
+                            </td>
+
+                            <td
+                              style={
+                                styles.td
+                              }
+                            >
+                              {formatDateTime(
+                                user.created_at
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </section>
+          )}
+
+          {/* ===================================================
+              REWARDS
+          =================================================== */}
+
+          {activeSection ===
+            "rewards" && (
+            <section
+              style={styles.content}
+            >
+
+              <div
+                style={{
+                  marginBottom: 18,
+                }}
+              >
+                <span
+                  style={
+                    styles.headerEyebrow
+                  }
+                >
+                  CUSTOMER LOYALTY
+                </span>
+
+                <h2
+                  style={{
+                    margin:
+                      "5px 0 0",
+                    fontSize: 26,
+                  }}
+                >
+                  Sportiva Rewards
+                </h2>
+              </div>
+
+              <div
+                className="sportiva-admin-stat-grid"
+                style={
+                  styles.statGrid
+                }
+              >
+                <StatCard
+                  icon={Users}
+                  label="Reward Members"
+                  value={
+                    memberRewards.length
+                  }
+                  detail="Reward accounts"
+                />
+
+                <StatCard
+                  icon={Gift}
+                  label="Current Points"
+                  value={currentPoints.toLocaleString()}
+                  detail="Spendable balance"
+                />
+
+                <StatCard
+                  icon={Trophy}
+                  label="Milestones"
+                  value={
+                    rewardCheckpoints.length
+                  }
+                  detail="Configured checkpoints"
+                />
+
+                <StatCard
+                  icon={Gift}
+                  label="Active Offers"
+                  value={
+                    communityOffers.filter(
+                      (item) =>
+                        item.is_active
+                    ).length
+                  }
+                  detail="Redeemable rewards"
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 4,
+                  marginBottom: 15,
+                  overflowX:
+                    "auto",
+                  padding: 4,
+                  width: "fit-content",
+                  maxWidth:
+                    "100%",
+                  border:
+                    "1px solid #e1e8e2",
+                  borderRadius: 10,
+                  background:
+                    "#fff",
+                }}
+              >
+                {[
+                  ["members", "Members"],
+                  [
+                    "milestones",
+                    "Milestones",
+                  ],
+                  ["offers", "Offers"],
+                  ["history", "History"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() =>
+                      setRewardTab(
+                        id
+                      )
+                    }
+                    style={{
+                      minHeight: 32,
+                      padding:
+                        "0 12px",
+                      border: 0,
+                      borderRadius: 7,
+                      background:
+                        rewardTab ===
+                        id
+                          ? "#edf5ee"
+                          : "transparent",
+                      color:
+                        rewardTab ===
+                        id
+                          ? "#315f3c"
+                          : "#78837b",
+                      fontSize: 9,
+                      fontWeight: 750,
+                      cursor:
+                        "pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {rewardTab ===
+                "members" && (
+                <div
+                  style={
+                    styles.tableCard
+                  }
+                >
+                  <div
+                    style={
+                      styles.tableWrap
+                    }
+                  >
+                    <table
+                      style={
+                        styles.table
+                      }
+                    >
+                      <thead>
+                        <tr>
+                          <th
+                            style={
+                              styles.th
+                            }
+                          >
+                            Member
+                          </th>
+
+                          <th
+                            style={
+                              styles.th
+                            }
+                          >
+                            Points
+                          </th>
+
+                          <th
+                            style={
+                              styles.th
+                            }
+                          >
+                            Lifetime
+                          </th>
+
+                          <th
+                            style={
+                              styles.th
+                            }
+                          >
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {memberRewards.map(
+                          (member) => {
+                            const user =
+                              users.find(
+                                (
+                                  item
+                                ) =>
+                                  item.id ===
+                                  member.user_id
+                              );
+
+                            return (
+                              <tr
+                                key={
+                                  member.user_id
+                                }
+                              >
+                                <td
+                                  style={
+                                    styles.td
+                                  }
+                                >
+                                  <div
+                                    style={
+                                      styles.person
+                                    }
+                                  >
+                                    <div
+                                      style={
+                                        styles.avatar
+                                      }
+                                    >
+                                      {user
+                                        ?.full_name
+                                        ?.charAt(
+                                          0
+                                        )
+                                        ?.toUpperCase() ||
+                                        "U"}
+                                    </div>
+
+                                    <div>
+                                      <strong
+                                        style={{
+                                          fontSize:
+                                            10,
+                                        }}
+                                      >
+                                        {user?.full_name ||
+                                          "Unknown Member"}
+                                      </strong>
+
+                                      <small
+                                        style={{
+                                          display:
+                                            "block",
+                                          marginTop:
+                                            3,
+                                          color:
+                                            "#8c958e",
+                                          fontSize:
+                                            8,
+                                        }}
+                                      >
+                                        {user?.email ||
+                                          member.user_id.slice(
+                                            0,
+                                            8
+                                          )}
+                                      </small>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td
+                                  style={
+                                    styles.td
+                                  }
+                                >
+                                  <strong>
+                                    {Number(
+                                      member.points ||
+                                        0
+                                    ).toLocaleString()}
+                                  </strong>
+                                </td>
+
+                                <td
+                                  style={
+                                    styles.td
+                                  }
+                                >
+                                  {Number(
+                                    member.lifetime_points ||
+                                      0
+                                  ).toLocaleString()}
+                                </td>
+
+                                <td
+                                  style={
+                                    styles.td
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openPoints(
+                                        member
+                                      )
+                                    }
+                                    style={{
+                                      ...styles.refreshButton,
+                                      minHeight: 32,
+                                    }}
+                                  >
+                                    <Edit3
+                                      size={
+                                        13
+                                      }
+                                    />
+                                    Adjust
+                                  </button>
+                                </td>
+                              </tr>
                             );
+                          }
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {rewardTab ===
+                "milestones" && (
+                <div
+                  className="sportiva-admin-turf-grid"
+                  style={
+                    styles.turfGrid
+                  }
+                >
+                  {rewardCheckpoints.map(
+                    (item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          padding: 19,
+                          border:
+                            "1px solid #e1e8e2",
+                          borderRadius: 15,
+                          background:
+                            "#fff",
+                          boxShadow:
+                            "0 10px 30px rgba(30,55,35,.035)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color:
+                              "#718979",
+                            fontSize: 7,
+                            fontWeight:
+                              900,
+                            letterSpacing:
+                              ".12em",
+                          }}
+                        >
+                          {
+                            item.points_required
+                          }{" "}
+                          POINTS
+                        </span>
+
+                        <h3
+                          style={{
+                            margin:
+                              "8px 0 6px",
+                            fontSize: 16,
+                          }}
+                        >
+                          {item.title}
+                        </h3>
+
+                        <p
+                          style={{
+                            minHeight: 35,
+                            margin: 0,
+                            color:
+                              COLORS.muted,
+                            fontSize: 10,
+                            lineHeight:
+                              1.5,
+                          }}
+                        >
+                          {item.description ||
+                            "No description."}
+                        </p>
+
+                        <div
+                          style={{
+                            marginTop: 12,
+                          }}
+                        >
+                          <Status
+                            type={
+                              item.is_active
+                                ? "success"
+                                : "neutral"
+                            }
+                          >
+                            {item.is_active
+                              ? "Active"
+                              : "Disabled"}
+                          </Status>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {rewardCheckpoints.length ===
+                    0 && (
+                    <div
+                      style={
+                        styles.empty
+                      }
+                    >
+                      No milestones
+                      configured.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {rewardTab ===
+                "offers" && (
+                <div
+                  className="sportiva-admin-turf-grid"
+                  style={
+                    styles.turfGrid
+                  }
+                >
+                  {communityOffers.map(
+                    (offer) => (
+                      <div
+                        key={offer.id}
+                        style={{
+                          padding: 19,
+                          border:
+                            "1px solid #e1e8e2",
+                          borderRadius: 15,
+                          background:
+                            "#fff",
+                          boxShadow:
+                            "0 10px 30px rgba(30,55,35,.035)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color:
+                              "#718979",
+                            fontSize: 7,
+                            fontWeight:
+                              900,
+                            letterSpacing:
+                              ".12em",
+                          }}
+                        >
+                          {
+                            offer.required_points
+                          }{" "}
+                          POINTS
+                        </span>
+
+                        <h3
+                          style={{
+                            margin:
+                              "8px 0 6px",
+                            fontSize: 16,
+                          }}
+                        >
+                          {offer.title}
+                        </h3>
+
+                        <p
+                          style={{
+                            minHeight: 35,
+                            margin: 0,
+                            color:
+                              COLORS.muted,
+                            fontSize: 10,
+                            lineHeight:
+                              1.5,
+                          }}
+                        >
+                          {offer.benefit ||
+                            offer.description ||
+                            "Reward benefit"}
+                        </p>
+
+                        {Number(
+                          offer.discount_value ||
+                            0
+                        ) > 0 && (
+                          <small
+                            style={{
+                              display:
+                                "block",
+                              marginTop:
+                                10,
+                              color:
+                                "#3c7048",
+                              fontSize: 9,
+                              fontWeight:
+                                800,
+                            }}
+                          >
+                            {offer.discount_type ===
+                            "percentage"
+                              ? `${offer.discount_value}% discount`
+                              : `৳${Number(
+                                  offer.discount_value
+                                ).toLocaleString()} discount`}
+                          </small>
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: 12,
+                          }}
+                        >
+                          <Status
+                            type={
+                              offer.is_active
+                                ? "success"
+                                : "neutral"
+                            }
+                          >
+                            {offer.is_active
+                              ? "Active"
+                              : "Disabled"}
+                          </Status>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {communityOffers.length ===
+                    0 && (
+                    <div
+                      style={
+                        styles.empty
+                      }
+                    >
+                      No reward offers
+                      configured.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {rewardTab ===
+                "history" && (
+                <div
+                  className="sportiva-admin-panel-grid"
+                  style={
+                    styles.panelGrid
+                  }
+                >
+
+                  <div
+                    style={styles.panel}
+                  >
+                    <div
+                      style={
+                        styles.panelHeader
+                      }
+                    >
+                      <div>
+                        <span
+                          style={
+                            styles.panelHeaderEyebrow
+                          }
+                        >
+                          POINT ACTIVITY
+                        </span>
+
+                        <h3
+                          style={
+                            styles.panelHeaderTitle
+                          }
+                        >
+                          Transactions
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 3,
+                      }}
+                    >
+                      {rewardTransactions
+                        .slice(0, 20)
+                        .map(
+                          (item) => (
+                            <div
+                              key={
+                                item.id
+                              }
+                              style={{
+                                minHeight:
+                                  54,
+                                display:
+                                  "flex",
+                                alignItems:
+                                  "center",
+                                justifyContent:
+                                  "space-between",
+                                borderBottom:
+                                  "1px solid #edf1ed",
+                              }}
+                            >
+                              <div>
+                                <strong
+                                  style={{
+                                    display:
+                                      "block",
+                                    fontSize:
+                                      9,
+                                    color:
+                                      "#334138",
+                                  }}
+                                >
+                                  {item.type ||
+                                    "Transaction"}
+                                </strong>
+
+                                <small
+                                  style={{
+                                    display:
+                                      "block",
+                                    marginTop:
+                                      3,
+                                    color:
+                                      "#8c958e",
+                                    fontSize:
+                                      8,
+                                  }}
+                                >
+                                  {item.description ||
+                                    "Reward activity"}
+                                </small>
+                              </div>
+
+                              <strong
+                                style={{
+                                  color:
+                                    Number(
+                                      item.points
+                                    ) >=
+                                    0
+                                      ? COLORS.success
+                                      : COLORS.danger,
+                                  fontSize:
+                                    12,
+                                }}
+                              >
+                                {Number(
+                                  item.points
+                                ) >=
+                                0
+                                  ? "+"
+                                  : ""}
+                                {
+                                  item.points
+                                }
+                              </strong>
+                            </div>
+                          )
+                        )}
+                    </div>
+                  </div>
+
+                  <div
+                    style={styles.panel}
+                  >
+                    <div
+                      style={
+                        styles.panelHeader
+                      }
+                    >
+                      <div>
+                        <span
+                          style={
+                            styles.panelHeaderEyebrow
+                          }
+                        >
+                          REDEMPTIONS
+                        </span>
+
+                        <h3
+                          style={
+                            styles.panelHeaderTitle
+                          }
+                        >
+                          Reward activity
+                        </h3>
+                      </div>
+                    </div>
+
+                    {rewardRedemptions
+                      .slice(0, 20)
+                      .map(
+                        (item) => (
+                          <div
+                            key={
+                              item.id
+                            }
+                            style={{
+                              minHeight:
+                                54,
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              justifyContent:
+                                "space-between",
+                              borderBottom:
+                                "1px solid #edf1ed",
+                            }}
+                          >
+                            <div>
+                              <strong
+                                style={{
+                                  display:
+                                    "block",
+                                  fontSize:
+                                    9,
+                                }}
+                              >
+                                Reward redeemed
+                              </strong>
+
+                              <small
+                                style={{
+                                  display:
+                                    "block",
+                                  marginTop:
+                                    3,
+                                  color:
+                                    COLORS.muted,
+                                  fontSize:
+                                    8,
+                                }}
+                              >
+                                {item.status ||
+                                  "Processed"}
+                              </small>
+                            </div>
+
+                            <strong
+                              style={{
+                                color:
+                                  COLORS.danger,
+                                fontSize:
+                                  12,
+                              }}
+                            >
+                              -
+                              {
+                                item.points_used
+                              }
+                            </strong>
+                          </div>
+                        )
+                      )}
+                  </div>
+
+                </div>
+              )}
+
+            </section>
+          )}
+
+          {/* ===================================================
+              COUPONS
+          =================================================== */}
+
+          {activeSection ===
+            "coupons" && (
+            <section
+              style={styles.content}
+            >
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems:
+                    "flex-end",
+                  justifyContent:
+                    "space-between",
+                  gap: 20,
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <span
+                    style={
+                      styles.headerEyebrow
+                    }
+                  >
+                    PROMOTION MANAGEMENT
+                  </span>
+
+                  <h2
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      fontSize: 26,
+                    }}
+                  >
+                    Coupons
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    openCreateCoupon
+                  }
+                  style={
+                    styles.refreshButton
+                  }
+                >
+                  <Plus size={15} />
+                  Create Coupon
+                </button>
+              </div>
+
+              <div
+                className="sportiva-admin-stat-grid"
+                style={
+                  styles.statGrid
+                }
+              >
+
+                <StatCard
+                  icon={TicketPercent}
+                  label="Total Coupons"
+                  value={
+                    coupons.length
+                  }
+                  detail="Created codes"
+                />
+
+                <StatCard
+                  icon={Check}
+                  label="Active"
+                  value={
+                    activeCoupons
+                  }
+                  detail="Enabled campaigns"
+                />
+
+                <StatCard
+                  icon={Activity}
+                  label="Redemptions"
+                  value={
+                    couponUsages.length
+                  }
+                  detail="Recorded uses"
+                />
+
+                <StatCard
+                  icon={TicketPercent}
+                  label="Limited"
+                  value={
+                    coupons.filter(
+                      (item) =>
+                        item.usage_limit
+                    ).length
+                  }
+                  detail="Limited campaigns"
+                />
+
+              </div>
+
+              <div
+                style={
+                  styles.toolbar
+                }
+              >
+                <div
+                  style={styles.search}
+                >
+                  <Search size={15} />
+
+                  <input
+                    value={couponSearch}
+                    onChange={(e) =>
+                      setCouponSearch(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Search coupon code or title..."
+                    style={
+                      styles.searchInput
+                    }
+                  />
+                </div>
+
+                <span
+                  style={{
+                    marginLeft:
+                      "auto",
+                    color:
+                      COLORS.muted,
+                    fontSize: 9,
+                  }}
+                >
+                  {
+                    filteredCoupons.length
+                  }{" "}
+                  coupons
+                </span>
+              </div>
+
+              <div
+                style={
+                  styles.tableCard
+                }
+              >
+                <div
+                  style={
+                    styles.tableWrap
+                  }
+                >
+                  <table
+                    style={
+                      styles.table
+                    }
+                  >
+                    <thead>
+                      <tr>
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Coupon
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Discount
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Usage
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Validity
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Status
+                        </th>
+
+                        <th
+                          style={
+                            styles.th
+                          }
+                        >
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredCoupons.map(
+                        (coupon) => {
+                          const usage =
+                            couponUsages.filter(
+                              (item) =>
+                                String(
+                                  item.coupon_id
+                                ) ===
+                                String(
+                                  coupon.id
+                                )
+                            ).length;
+
+                          const now =
+                            Date.now();
+
+                          const scheduled =
+                            coupon.starts_at &&
+                            now <
+                              new Date(
+                                coupon.starts_at
+                              ).getTime();
+
+                          const expired =
+                            coupon.expires_at &&
+                            now >
+                              new Date(
+                                coupon.expires_at
+                              ).getTime();
 
                           return (
                             <tr
                               key={
-                                member.user_id
+                                coupon.id
                               }
                             >
-
-                              <td>
-                                <div className="admin-person">
-
-                                  <div>
-                                    {user
-                                      ?.full_name
-                                      ?.charAt(0)
-                                      ?.toUpperCase() ||
-                                      "U"}
+                              <td
+                                style={
+                                  styles.td
+                                }
+                              >
+                                <div
+                                  style={{
+                                    display:
+                                      "flex",
+                                    alignItems:
+                                      "center",
+                                    gap: 9,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width:
+                                        34,
+                                      height:
+                                        34,
+                                      display:
+                                        "grid",
+                                      placeItems:
+                                        "center",
+                                      borderRadius:
+                                        9,
+                                      background:
+                                        "#edf5ee",
+                                      color:
+                                        "#3d7047",
+                                      flex:
+                                        "0 0 auto",
+                                    }}
+                                  >
+                                    <TicketPercent
+                                      size={
+                                        16
+                                      }
+                                    />
                                   </div>
 
-                                  <section>
-                                    <strong>
-                                      {user
-                                        ?.full_name ||
-                                        "Unknown Member"}
+                                  <div>
+                                    <strong
+                                      style={{
+                                        display:
+                                          "block",
+                                        fontSize:
+                                          10,
+                                        letterSpacing:
+                                          ".035em",
+                                      }}
+                                    >
+                                      {
+                                        coupon.code
+                                      }
                                     </strong>
 
-                                    <small>
-                                      {user?.email ||
-                                        member.user_id.slice(
-                                          0,
-                                          8
-                                        )}
+                                    <small
+                                      style={{
+                                        display:
+                                          "block",
+                                        marginTop:
+                                          3,
+                                        color:
+                                          "#8c958e",
+                                        fontSize:
+                                          8,
+                                      }}
+                                    >
+                                      {coupon.title ||
+                                        "Sportiva promotion"}
                                     </small>
-                                  </section>
+                                  </div>
 
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      copyCoupon(
+                                        coupon.code
+                                      )
+                                    }
+                                    style={{
+                                      width:
+                                        26,
+                                      height:
+                                        26,
+                                      display:
+                                        "grid",
+                                      placeItems:
+                                        "center",
+                                      marginLeft:
+                                        "auto",
+                                      border:
+                                        "1px solid #e1e8e2",
+                                      borderRadius:
+                                        7,
+                                      background:
+                                        "#fff",
+                                      color:
+                                        "#738077",
+                                      cursor:
+                                        "pointer",
+                                    }}
+                                  >
+                                    <ClipboardList
+                                      size={
+                                        12
+                                      }
+                                    />
+                                  </button>
                                 </div>
                               </td>
 
-                              <td>
-                                <strong>
-                                  {Number(
-                                    member.points ||
-                                      0
-                                  ).toLocaleString()}
+                              <td
+                                style={
+                                  styles.td
+                                }
+                              >
+                                <strong
+                                  style={{
+                                    color:
+                                      "#31683d",
+                                  }}
+                                >
+                                  {coupon.discount_type ===
+                                  "percentage"
+                                    ? `${Number(
+                                        coupon.discount_value
+                                      )}% OFF`
+                                    : `৳${Number(
+                                        coupon.discount_value
+                                      ).toLocaleString()} OFF`}
                                 </strong>
-                              </td>
 
-                              <td>
                                 {Number(
-                                  member.lifetime_points ||
+                                  coupon.min_booking_amount ||
                                     0
-                                ).toLocaleString()}
-                              </td>
-
-                              <td>
-                                {formatDateTime(
-                                  member.updated_at
+                                ) >
+                                  0 && (
+                                  <small
+                                    style={{
+                                      display:
+                                        "block",
+                                      marginTop:
+                                        3,
+                                      color:
+                                        "#909891",
+                                      fontSize:
+                                        8,
+                                    }}
+                                  >
+                                    Min ৳
+                                    {Number(
+                                      coupon.min_booking_amount
+                                    ).toLocaleString()}
+                                  </small>
                                 )}
                               </td>
 
-                              <td>
-                                <button
-                                  type="button"
-                                  className="admin-small-button"
-                                  onClick={() =>
-                                    openPoints(
-                                      member
-                                    )
-                                  }
+                              <td
+                                style={
+                                  styles.td
+                                }
+                              >
+                                <strong>
+                                  {usage}
+                                </strong>
+
+                                <span
+                                  style={{
+                                    marginLeft:
+                                      3,
+                                    color:
+                                      "#8c958e",
+                                    fontSize:
+                                      8,
+                                  }}
                                 >
-                                  <Edit3
-                                    size={14}
-                                  />
-                                  Adjust
-                                </button>
+                                  {coupon.usage_limit
+                                    ? ` / ${coupon.usage_limit}`
+                                    : " / unlimited"}
+                                </span>
                               </td>
 
-                            </tr>
-                          );
-                        }
-                      )}
-
-                    </tbody>
-
-                  </table>
-
-                </div>
-
-              </div>
-            )}
-
-            {rewardSection ===
-              "milestones" && (
-              <div className="admin-card-grid">
-
-                {rewardCheckpoints.map(
-                  (item) => (
-                    <div
-                      className="admin-reward-box"
-                      key={item.id}
-                    >
-                      <span>
-                        {
-                          item.points_required
-                        }{" "}
-                        POINTS
-                      </span>
-
-                      <strong>
-                        {item.title}
-                      </strong>
-
-                      <p>
-                        {item.description ||
-                          "No description."}
-                      </p>
-
-                      <StatusBadge
-                        type={
-                          item.is_active
-                            ? "success"
-                            : "neutral"
-                        }
-                      >
-                        {item.is_active
-                          ? "Active"
-                          : "Disabled"}
-                      </StatusBadge>
-                    </div>
-                  )
-                )}
-
-              </div>
-            )}
-
-            {rewardSection ===
-              "offers" && (
-              <div className="admin-card-grid">
-
-                {communityOffers.map(
-                  (offer) => (
-                    <div
-                      className="admin-reward-box"
-                      key={offer.id}
-                    >
-
-                      <span>
-                        {offer.required_points}{" "}
-                        POINTS
-                      </span>
-
-                      <strong>
-                        {offer.title}
-                      </strong>
-
-                      <p>
-                        {offer.description ||
-                          offer.benefit ||
-                          "Reward benefit"}
-                      </p>
-
-                      {Number(
-                        offer.discount_value ||
-                          0
-                      ) > 0 && (
-                        <small>
-                          {offer.discount_type ===
-                          "percentage"
-                            ? `${offer.discount_value}% discount`
-                            : `৳${Number(
-                                offer.discount_value
-                              ).toLocaleString()} discount`}
-                        </small>
-                      )}
-
-                      <StatusBadge
-                        type={
-                          offer.is_active
-                            ? "success"
-                            : "neutral"
-                        }
-                      >
-                        {offer.is_active
-                          ? "Active"
-                          : "Disabled"}
-                      </StatusBadge>
-
-                    </div>
-                  )
-                )}
-
-              </div>
-            )}
-
-            {rewardSection ===
-              "history" && (
-              <div className="admin-overview-grid">
-
-                <div className="admin-panel">
-
-                  <div className="admin-panel-header">
-                    <div>
-                      <span>
-                        POINT ACTIVITY
-                      </span>
-
-                      <h3>
-                        Transactions
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="admin-history-list">
-
-                    {rewardTransactions
-                      .slice(0, 20)
-                      .map((item) => (
-                        <div
-                          className="admin-history-row"
-                          key={item.id}
-                        >
-                          <div>
-                            <strong>
-                              {item.type ||
-                                "Transaction"}
-                            </strong>
-
-                            <small>
-                              {item.description ||
-                                "Reward activity"}
-                            </small>
-                          </div>
-
-                          <b
-                            className={
-                              Number(
-                                item.points
-                              ) >= 0
-                                ? "positive"
-                                : "negative"
-                            }
-                          >
-                            {Number(
-                              item.points
-                            ) >= 0
-                              ? "+"
-                              : ""}
-                            {item.points}
-                          </b>
-                        </div>
-                      ))}
-
-                  </div>
-
-                </div>
-
-                <div className="admin-panel">
-
-                  <div className="admin-panel-header">
-                    <div>
-                      <span>
-                        REDEMPTIONS
-                      </span>
-
-                      <h3>
-                        Recent redemptions
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="admin-history-list">
-
-                    {rewardRedemptions
-                      .slice(0, 20)
-                      .map((item) => (
-                        <div
-                          className="admin-history-row"
-                          key={item.id}
-                        >
-                          <div>
-                            <strong>
-                              Reward redeemed
-                            </strong>
-
-                            <small>
-                              {item.status ||
-                                "Processed"}
-                            </small>
-                          </div>
-
-                          <b className="negative">
-                            -
-                            {item.points_used ||
-                              0}
-                          </b>
-                        </div>
-                      ))}
-
-                  </div>
-
-                </div>
-
-              </div>
-            )}
-
-          </section>
-        )}
-
-        {/* ======================================================
-            COUPONS
-        ====================================================== */}
-
-        {activeSection === "coupons" && (
-          <section className="admin-content">
-
-            <div className="admin-page-title-row">
-
-              <div>
-                <span>
-                  PROMOTION MANAGEMENT
-                </span>
-
-                <h2>
-                  Coupons
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                className="admin-primary-button"
-                onClick={createCoupon}
-              >
-                <Plus size={16} />
-                Create Coupon
-              </button>
-
-            </div>
-
-            <div className="admin-stat-grid">
-
-              <StatCard
-                icon={TicketPercent}
-                label="Total Coupons"
-                value={coupons.length}
-                detail="Created codes"
-              />
-
-              <StatCard
-                icon={Check}
-                label="Active"
-                value={activeCoupons}
-                detail="Currently enabled"
-              />
-
-              <StatCard
-                icon={Activity}
-                label="Redemptions"
-                value={
-                  couponUsages.length
-                }
-                detail="Recorded uses"
-              />
-
-              <StatCard
-                icon={Settings2}
-                label="Usage Limit"
-                value={
-                  coupons.filter(
-                    (item) =>
-                      item.usage_limit
-                  ).length
-                }
-                detail="Limited campaigns"
-              />
-
-            </div>
-
-            <div className="admin-toolbar">
-
-              <div className="admin-search-box">
-                <Search size={16} />
-
-                <input
-                  type="text"
-                  placeholder="Search coupon code..."
-                  value={couponSearch}
-                  onChange={(event) =>
-                    setCouponSearch(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-
-              <span>
-                {filteredCoupons.length} coupons
-              </span>
-
-            </div>
-
-            <div className="admin-table-card">
-
-              <div className="admin-table-scroll">
-
-                <table className="admin-table">
-
-                  <thead>
-                    <tr>
-                      <th>Coupon</th>
-                      <th>Discount</th>
-                      <th>Usage</th>
-                      <th>Validity</th>
-                      <th>Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-
-                  <tbody>
-
-                    {filteredCoupons.map(
-                      (coupon) => {
-                        const usage =
-                          couponUsages.filter(
-                            (item) =>
-                              String(
-                                item.coupon_id
-                              ) ===
-                              String(coupon.id)
-                          ).length;
-
-                        const now =
-                          Date.now();
-
-                        const scheduled =
-                          coupon.starts_at &&
-                          now <
-                            new Date(
-                              coupon.starts_at
-                            ).getTime();
-
-                        const expired =
-                          coupon.expires_at &&
-                          now >
-                            new Date(
-                              coupon.expires_at
-                            ).getTime();
-
-                        return (
-                          <tr
-                            key={coupon.id}
-                          >
-
-                            <td>
-
-                              <div className="admin-coupon">
-
-                                <div>
-                                  <TicketPercent
-                                    size={16}
-                                  />
-                                </div>
-
-                                <section>
-                                  <strong>
-                                    {coupon.code}
-                                  </strong>
-
-                                  <small>
-                                    {coupon.title ||
-                                      "Sportiva promotion"}
-                                  </small>
-                                </section>
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    copyCoupon(
-                                      coupon.code
-                                    )
-                                  }
-                                  title="Copy code"
+                              <td
+                                style={
+                                  styles.td
+                                }
+                              >
+                                <div
+                                  style={{
+                                    color:
+                                      "#76817a",
+                                    fontSize:
+                                      8,
+                                    whiteSpace:
+                                      "nowrap",
+                                  }}
                                 >
-                                  <ClipboardList
-                                    size={13}
-                                  />
-                                </button>
-
-                              </div>
-
-                            </td>
-
-                            <td>
-                              <strong>
-                                {coupon.discount_type ===
-                                "percentage"
-                                  ? `${Number(
-                                      coupon.discount_value
-                                    )}% OFF`
-                                  : `৳${Number(
-                                      coupon.discount_value
-                                    ).toLocaleString()} OFF`}
-                              </strong>
-                            </td>
-
-                            <td>
-                              <strong>
-                                {usage}
-                              </strong>
-
-                              <span className="admin-muted">
-                                {coupon.usage_limit
-                                  ? ` / ${coupon.usage_limit}`
-                                  : " / unlimited"}
-                              </span>
-                            </td>
-
-                            <td>
-                              <div className="admin-validity">
-                                <span>
                                   {coupon.starts_at
                                     ? formatDateTime(
                                         coupon.starts_at
                                       )
                                     : "Immediately"}
-                                </span>
 
-                                <span>
-                                  →
-                                </span>
+                                  <span
+                                    style={{
+                                      margin:
+                                        "0 5px",
+                                      color:
+                                        "#a0a7a1",
+                                    }}
+                                  >
+                                    →
+                                  </span>
 
-                                <span>
                                   {coupon.expires_at
                                     ? formatDateTime(
                                         coupon.expires_at
                                       )
                                     : "No expiry"}
-                                </span>
-                              </div>
-                            </td>
+                                </div>
+                              </td>
 
-                            <td>
+                              <td
+                                style={
+                                  styles.td
+                                }
+                              >
+                                {!coupon.is_active ? (
+                                  <Status>
+                                    Inactive
+                                  </Status>
+                                ) : scheduled ? (
+                                  <Status type="info">
+                                    Scheduled
+                                  </Status>
+                                ) : expired ? (
+                                  <Status type="danger">
+                                    Expired
+                                  </Status>
+                                ) : (
+                                  <Status type="success">
+                                    Active
+                                  </Status>
+                                )}
+                              </td>
 
-                              {!coupon.is_active ? (
-                                <StatusBadge type="neutral">
-                                  Inactive
-                                </StatusBadge>
-                              ) : scheduled ? (
-                                <StatusBadge type="info">
-                                  Scheduled
-                                </StatusBadge>
-                              ) : expired ? (
-                                <StatusBadge type="danger">
-                                  Expired
-                                </StatusBadge>
-                              ) : (
-                                <StatusBadge type="success">
-                                  Active
-                                </StatusBadge>
-                              )}
-
-                            </td>
-
-                            <td>
-
-                              <div className="admin-row-actions">
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    editCoupon(
-                                      coupon
-                                    )
+                              <td
+                                style={
+                                  styles.td
+                                }
+                              >
+                                <div
+                                  style={
+                                    styles.actions
                                   }
                                 >
-                                  <Edit3 size={14} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    toggleCoupon(
-                                      coupon
-                                    )
-                                  }
-                                >
-                                  {coupon.is_active ? (
-                                    <X size={14} />
-                                  ) : (
-                                    <Check
-                                      size={14}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openEditCoupon(
+                                        coupon
+                                      )
+                                    }
+                                    style={
+                                      styles.iconButton
+                                    }
+                                  >
+                                    <Edit3
+                                      size={
+                                        13
+                                      }
                                     />
-                                  )}
-                                </button>
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  className="danger"
-                                  onClick={() =>
-                                    deleteCoupon(
-                                      coupon
-                                    )
-                                  }
-                                >
-                                  <Trash2
-                                    size={14}
-                                  />
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggleCoupon(
+                                        coupon
+                                      )
+                                    }
+                                    style={
+                                      styles.iconButton
+                                    }
+                                  >
+                                    {coupon.is_active ? (
+                                      <X
+                                        size={
+                                          13
+                                        }
+                                      />
+                                    ) : (
+                                      <Check
+                                        size={
+                                          13
+                                        }
+                                      />
+                                    )}
+                                  </button>
 
-                              </div>
-
-                            </td>
-
-                          </tr>
-                        );
-                      }
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-              {filteredCoupons.length ===
-                0 && (
-                <div className="admin-empty">
-                  <TicketPercent size={28} />
-                  <strong>
-                    No coupons found.
-                  </strong>
-                  <span>
-                    Create a promotional code
-                    to start.
-                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      deleteCoupon(
+                                        coupon
+                                      )
+                                    }
+                                    style={{
+                                      ...styles.iconButton,
+                                      color:
+                                        COLORS.danger,
+                                    }}
+                                  >
+                                    <Trash2
+                                      size={
+                                        13
+                                      }
+                                    />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
 
-            </div>
+                {filteredCoupons.length ===
+                  0 && (
+                  <div
+                    style={
+                      styles.empty
+                    }
+                  >
+                    <TicketPercent
+                      size={27}
+                    />
 
-          </section>
-        )}
+                    <strong
+                      style={
+                        styles.emptyTitle
+                      }
+                    >
+                      No coupons found.
+                    </strong>
 
-        {/* ======================================================
-            ANNOUNCEMENTS
-        ====================================================== */}
-
-        {activeSection ===
-          "announcements" && (
-          <section className="admin-content">
-
-            <div className="admin-page-title-row">
-
-              <div>
-                <span>
-                  CUSTOMER COMMUNICATION
-                </span>
-
-                <h2>
-                  Announcements
-                </h2>
+                    <span
+                      style={
+                        styles.emptyText
+                      }
+                    >
+                      Create a promotional
+                      code to begin.
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <button
-                type="button"
-                className="admin-primary-button"
-                onClick={() =>
-                  setShowAnnouncementModal(
-                    true
-                  )
+            </section>
+          )}
+
+          {/* ===================================================
+              ANNOUNCEMENTS
+          =================================================== */}
+
+          {activeSection ===
+            "announcements" && (
+            <section
+              style={styles.content}
+            >
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "flex-end",
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <span
+                    style={
+                      styles.headerEyebrow
+                    }
+                  >
+                    CUSTOMER
+                    COMMUNICATION
+                  </span>
+
+                  <h2
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      fontSize: 26,
+                    }}
+                  >
+                    Announcements
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowAnnouncementModal(
+                      true
+                    )
+                  }
+                  style={
+                    styles.refreshButton
+                  }
+                >
+                  <Plus size={15} />
+                  New Announcement
+                </button>
+              </div>
+
+              <div
+                style={
+                  styles.listCard
+                    ? styles.listCard
+                    : {
+                        overflow:
+                          "hidden",
+                        border:
+                          "1px solid #e1e8e2",
+                        borderRadius:
+                          16,
+                        background:
+                          "#fff",
+                      }
                 }
               >
-                <Plus size={16} />
-                New Announcement
-              </button>
+                {announcements.map(
+                  (announcement) => (
+                    <div
+                      key={
+                        announcement.id
+                      }
+                      style={{
+                        minHeight: 76,
+                        display:
+                          "flex",
+                        alignItems:
+                          "center",
+                        justifyContent:
+                          "space-between",
+                        gap: 20,
+                        padding:
+                          "14px 17px",
+                        borderBottom:
+                          "1px solid #edf1ed",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display:
+                            "flex",
+                          alignItems:
+                            "center",
+                          gap: 10,
+                          minWidth: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 35,
+                            height: 35,
+                            display:
+                              "grid",
+                            placeItems:
+                              "center",
+                            borderRadius:
+                              10,
+                            background:
+                              "#eef5ef",
+                            color:
+                              "#42704c",
+                            flex:
+                              "0 0 auto",
+                          }}
+                        >
+                          <Megaphone
+                            size={16}
+                          />
+                        </div>
 
-            </div>
+                        <div
+                          style={{
+                            minWidth:
+                              0,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              display:
+                                "block",
+                              fontSize:
+                                10,
+                            }}
+                          >
+                            {
+                              announcement.title
+                            }
+                          </strong>
 
-            <div className="admin-list-card">
+                          <p
+                            style={{
+                              margin:
+                                "4px 0 0",
+                              color:
+                                "#7f8982",
+                              fontSize:
+                                9,
+                              overflow:
+                                "hidden",
+                              textOverflow:
+                                "ellipsis",
+                              whiteSpace:
+                                "nowrap",
+                            }}
+                          >
+                            {announcement.message ||
+                              "No message"}
+                          </p>
 
-              {announcements.map(
-                (announcement) => (
-                  <div
-                    className="admin-list-item"
-                    key={announcement.id}
-                  >
-
-                    <div className="admin-list-leading">
-
-                      <div className="admin-list-icon">
-                        <Megaphone
-                          size={17}
-                        />
+                          <small
+                            style={{
+                              display:
+                                "block",
+                              marginTop:
+                                3,
+                              color:
+                                "#9aa19c",
+                              fontSize:
+                                7,
+                            }}
+                          >
+                            {formatDateTime(
+                              announcement.created_at
+                            )}
+                          </small>
+                        </div>
                       </div>
 
-                      <div>
-                        <strong>
-                          {announcement.title}
-                        </strong>
+                      <div
+                        style={{
+                          display:
+                            "flex",
+                          alignItems:
+                            "center",
+                          gap: 5,
+                          flex:
+                            "0 0 auto",
+                        }}
+                      >
+                        <Status
+                          type={
+                            announcement.is_active
+                              ? "success"
+                              : "neutral"
+                          }
+                        >
+                          {announcement.is_active
+                            ? "Active"
+                            : "Disabled"}
+                        </Status>
 
-                        <p>
-                          {announcement.message ||
-                            "No message"}
-                        </p>
-
-                        <small>
-                          {formatDateTime(
-                            announcement.created_at
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleAnnouncement(
+                              announcement
+                            )
+                          }
+                          style={
+                            styles.iconButton
+                          }
+                        >
+                          {announcement.is_active ? (
+                            <X
+                              size={
+                                13
+                              }
+                            />
+                          ) : (
+                            <Check
+                              size={
+                                13
+                              }
+                            />
                           )}
-                        </small>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteAnnouncement(
+                              announcement
+                            )
+                          }
+                          style={{
+                            ...styles.iconButton,
+                            color:
+                              COLORS.danger,
+                          }}
+                        >
+                          <Trash2
+                            size={13}
+                          />
+                        </button>
                       </div>
-
                     </div>
+                  )
+                )}
 
-                    <div className="admin-list-trailing">
+                {announcements.length ===
+                  0 && (
+                  <div
+                    style={
+                      styles.empty
+                    }
+                  >
+                    <Megaphone
+                      size={27}
+                    />
 
-                      <StatusBadge
-                        type={
-                          announcement.is_active
-                            ? "success"
-                            : "neutral"
-                        }
-                      >
-                        {announcement.is_active
-                          ? "Active"
-                          : "Disabled"}
-                      </StatusBadge>
+                    <strong
+                      style={
+                        styles.emptyTitle
+                      }
+                    >
+                      No announcements yet.
+                    </strong>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleAnnouncement(
-                            announcement
-                          )
-                        }
-                      >
-                        {announcement.is_active ? (
-                          <X size={14} />
-                        ) : (
-                          <Check size={14} />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger"
-                        onClick={() =>
-                          deleteAnnouncement(
-                            announcement
-                          )
-                        }
-                      >
-                        <Trash2 size={14} />
-                      </button>
-
-                    </div>
-
+                    <span
+                      style={
+                        styles.emptyText
+                      }
+                    >
+                      Publish your first
+                      customer update.
+                    </span>
                   </div>
-                )
-              )}
+                )}
+              </div>
 
-              {announcements.length ===
-                0 && (
-                <div className="admin-empty">
-                  <Megaphone size={27} />
-                  <strong>
-                    No announcements yet.
-                  </strong>
-                  <span>
-                    Publish your first customer
-                    update.
-                  </span>
-                </div>
-              )}
+            </section>
+          )}
 
-            </div>
+        </main>
+      </div>
 
-          </section>
-        )}
-
-      </main>
-
-      {/* ========================================================
+      {/* =======================================================
           TURF MODAL
-      ======================================================== */}
+      ======================================================= */}
 
       {showTurfModal && (
         <Modal
@@ -3671,57 +6569,85 @@ export default function Admin() {
               : "Add Turf"
           }
           onClose={() =>
-            setShowTurfModal(false)
+            setShowTurfModal(
+              false
+            )
           }
         >
           <form
-            className="admin-modal-form"
+            style={styles.form}
             onSubmit={saveTurf}
           >
 
-            <label>
-              Turf Name
+            <div
+              style={{
+                ...styles.field,
+                marginBottom: 14,
+              }}
+            >
+              <label
+                style={styles.label}
+              >
+                Turf Name
+              </label>
 
               <input
-                type="text"
                 value={turfForm.name}
-                onChange={(event) =>
+                onChange={(e) =>
                   setTurfForm(
                     (current) => ({
                       ...current,
-                      name: event.target.value,
+                      name: e.target
+                        .value,
                     })
                   )
                 }
-                placeholder="Sportiva Main Turf"
+                style={styles.input}
                 required
               />
-            </label>
+            </div>
 
-            <label>
-              Description
+            <div
+              style={{
+                ...styles.field,
+                marginBottom: 14,
+              }}
+            >
+              <label
+                style={styles.label}
+              >
+                Description
+              </label>
 
               <textarea
-                rows="4"
                 value={
                   turfForm.description
                 }
-                onChange={(event) =>
+                onChange={(e) =>
                   setTurfForm(
                     (current) => ({
                       ...current,
                       description:
-                        event.target.value,
+                        e.target.value,
                     })
                   )
                 }
+                style={styles.textarea}
               />
-            </label>
+            </div>
 
-            <div className="admin-form-grid">
-
-              <label>
-                Price / Hour
+            <div
+              className="sportiva-admin-form-grid"
+              style={styles.formGrid}
+            >
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Price / Hour
+                </label>
 
                 <input
                   type="number"
@@ -3729,49 +6655,65 @@ export default function Admin() {
                   value={
                     turfForm.price_per_hour
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setTurfForm(
                       (current) => ({
                         ...current,
                         price_per_hour:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                   required
                 />
-              </label>
+              </div>
 
-              <label>
-                Image URL
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Image URL
+                </label>
 
                 <input
                   type="url"
                   value={
                     turfForm.image_url
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setTurfForm(
                       (current) => ({
                         ...current,
                         image_url:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
-                  placeholder="https://..."
+                  style={styles.input}
                 />
-              </label>
-
+              </div>
             </div>
 
-            <div className="admin-modal-actions">
-
+            <div
+              className="sportiva-admin-modal-actions"
+              style={
+                styles.formActions
+              }
+            >
               <button
                 type="button"
-                className="admin-secondary-button"
                 onClick={() =>
-                  setShowTurfModal(false)
+                  setShowTurfModal(
+                    false
+                  )
+                }
+                style={
+                  styles.refreshButton
                 }
               >
                 Cancel
@@ -3779,8 +6721,10 @@ export default function Admin() {
 
               <button
                 type="submit"
-                className="admin-primary-button"
                 disabled={saving}
+                style={
+                  styles.refreshButton
+                }
               >
                 {saving
                   ? "Saving..."
@@ -3788,16 +6732,15 @@ export default function Admin() {
                   ? "Save Changes"
                   : "Create Turf"}
               </button>
-
             </div>
 
           </form>
         </Modal>
       )}
 
-      {/* ========================================================
+      {/* =======================================================
           SLOT MODAL
-      ======================================================== */}
+      ======================================================= */}
 
       {showSlotModal && (
         <Modal
@@ -3808,143 +6751,202 @@ export default function Admin() {
               : "Add Time Slot"
           }
           onClose={() =>
-            setShowSlotModal(false)
+            setShowSlotModal(
+              false
+            )
           }
         >
           <form
-            className="admin-modal-form"
+            style={styles.form}
             onSubmit={saveSlot}
           >
 
-            <div className="admin-form-grid">
-
-              <label>
-                Turf
+            <div
+              className="sportiva-admin-form-grid"
+              style={styles.formGrid}
+            >
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Turf
+                </label>
 
                 <select
-                  value={slotForm.turf_id}
-                  onChange={(event) =>
+                  value={
+                    slotForm.turf_id
+                  }
+                  onChange={(e) =>
                     setSlotForm(
                       (current) => ({
                         ...current,
                         turf_id:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
+                  }
+                  style={
+                    styles.select
                   }
                   required
                 >
                   <option value="">
-                    Select turf
+                    Select Turf
                   </option>
 
-                  {turfs.map((turf) => (
-                    <option
-                      key={turf.id}
-                      value={turf.id}
-                    >
-                      {turf.name}
-                    </option>
-                  ))}
+                  {turfs.map(
+                    (turf) => (
+                      <option
+                        key={
+                          turf.id
+                        }
+                        value={
+                          turf.id
+                        }
+                      >
+                        {turf.name}
+                      </option>
+                    )
+                  )}
                 </select>
-              </label>
+              </div>
 
-              <label>
-                Date
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Date
+                </label>
 
                 <input
                   type="date"
                   value={
                     slotForm.slot_date
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setSlotForm(
                       (current) => ({
                         ...current,
                         slot_date:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                   required
                 />
-              </label>
+              </div>
 
-              <label>
-                Start Time
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Start Time
+                </label>
 
                 <input
                   type="time"
                   value={
                     slotForm.start_time
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setSlotForm(
                       (current) => ({
                         ...current,
                         start_time:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                   required
                 />
-              </label>
+              </div>
 
-              <label>
-                End Time
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  End Time
+                </label>
 
                 <input
                   type="time"
                   value={
                     slotForm.end_time
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setSlotForm(
                       (current) => ({
                         ...current,
                         end_time:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                   required
                 />
-              </label>
-
+              </div>
             </div>
 
-            <label className="admin-check-row">
-
+            <label
+              style={styles.check}
+            >
               <input
                 type="checkbox"
                 checked={
                   slotForm.is_available
                 }
-                onChange={(event) =>
+                onChange={(e) =>
                   setSlotForm(
                     (current) => ({
                       ...current,
                       is_available:
-                        event.target.checked,
+                        e.target
+                          .checked,
                     })
                   )
                 }
               />
 
-              <span>
-                Available for customer booking
+              <span
+                style={
+                  styles.checkLabel
+                }
+              >
+                Available for customer
+                booking
               </span>
-
             </label>
 
-            <div className="admin-modal-actions">
-
+            <div
+              className="sportiva-admin-modal-actions"
+              style={
+                styles.formActions
+              }
+            >
               <button
                 type="button"
-                className="admin-secondary-button"
                 onClick={() =>
-                  setShowSlotModal(false)
+                  setShowSlotModal(
+                    false
+                  )
+                }
+                style={
+                  styles.refreshButton
                 }
               >
                 Cancel
@@ -3952,8 +6954,10 @@ export default function Admin() {
 
               <button
                 type="submit"
-                className="admin-primary-button"
                 disabled={saving}
+                style={
+                  styles.refreshButton
+                }
               >
                 {saving
                   ? "Saving..."
@@ -3961,16 +6965,15 @@ export default function Admin() {
                   ? "Save Changes"
                   : "Create Slot"}
               </button>
-
             </div>
 
           </form>
         </Modal>
       )}
 
-      {/* ========================================================
+      {/* =======================================================
           COUPON MODAL
-      ======================================================== */}
+      ======================================================= */}
 
       {showCouponModal && (
         <Modal
@@ -3982,94 +6985,130 @@ export default function Admin() {
               : "Create Coupon"
           }
           onClose={() =>
-            setShowCouponModal(false)
+            setShowCouponModal(
+              false
+            )
           }
         >
           <form
-            className="admin-modal-form"
+            style={styles.form}
             onSubmit={saveCoupon}
           >
 
-            <div className="admin-form-grid">
-
-              <label className="full">
+            <div
+              style={{
+                ...styles.field,
+                marginBottom: 14,
+              }}
+            >
+              <label
+                style={
+                  styles.label
+                }
+              >
                 Coupon Code
-
-                <div className="admin-code-input">
-
-                  <input
-                    type="text"
-                    value={
-                      couponForm.code
-                    }
-                    onChange={(event) =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          code:
-                            event.target.value.toUpperCase(),
-                        })
-                      )
-                    }
-                    placeholder="SPORTIVA-XXXXXX"
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          code:
-                            generateCouponCode(),
-                        })
-                      )
-                    }
-                  >
-                    Generate
-                  </button>
-
-                </div>
-
               </label>
 
-              <label>
-                Title
+              <div
+                style={
+                  styles.codeRow
+                }
+              >
+                <input
+                  value={
+                    couponForm.code
+                  }
+                  onChange={(e) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        code: e.target
+                          .value
+                          .toUpperCase(),
+                      })
+                    )
+                  }
+                  style={styles.input}
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        code:
+                          generateCouponCode(),
+                      })
+                    )
+                  }
+                  style={
+                    styles.generateButton
+                  }
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+
+            <div
+              className="sportiva-admin-form-grid"
+              style={styles.formGrid}
+            >
+
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Title
+                </label>
 
                 <input
-                  type="text"
                   value={
                     couponForm.title
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         title:
-                          event.target.value,
+                          e.target.value,
                       })
                     )
                   }
                   placeholder="Weekend Special"
+                  style={styles.input}
                 />
-              </label>
+              </div>
 
-              <label>
-                Discount Type
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Discount Type
+                </label>
 
                 <select
                   value={
                     couponForm.discount_type
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         discount_type:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
+                  }
+                  style={
+                    styles.select
                   }
                 >
                   <option value="percentage">
@@ -4080,10 +7119,16 @@ export default function Admin() {
                     Fixed Amount
                   </option>
                 </select>
-              </label>
+              </div>
 
-              <label>
-                Discount Value
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Discount Value
+                </label>
 
                 <input
                   type="number"
@@ -4092,21 +7137,29 @@ export default function Admin() {
                   value={
                     couponForm.discount_value
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         discount_value:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                   required
                 />
-              </label>
+              </div>
 
-              <label>
-                Minimum Booking
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Minimum Booking
+                </label>
 
                 <input
                   type="number"
@@ -4114,20 +7167,28 @@ export default function Admin() {
                   value={
                     couponForm.min_booking_amount
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         min_booking_amount:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                 />
-              </label>
+              </div>
 
-              <label>
-                Maximum Discount
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Maximum Discount
+                </label>
 
                 <input
                   type="number"
@@ -4135,12 +7196,13 @@ export default function Admin() {
                   value={
                     couponForm.max_discount_amount
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         max_discount_amount:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
@@ -4148,12 +7210,19 @@ export default function Admin() {
                     couponForm.discount_type !==
                     "percentage"
                   }
+                  style={styles.input}
                   placeholder="Optional"
                 />
-              </label>
+              </div>
 
-              <label>
-                Total Usage Limit
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Total Usage Limit
+                </label>
 
                 <input
                   type="number"
@@ -4161,21 +7230,29 @@ export default function Admin() {
                   value={
                     couponForm.usage_limit
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         usage_limit:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                   placeholder="Unlimited"
                 />
-              </label>
+              </div>
 
-              <label>
-                Per User Limit
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Per User Limit
+                </label>
 
                 <input
                   type="number"
@@ -4183,112 +7260,154 @@ export default function Admin() {
                   value={
                     couponForm.per_user_limit
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         per_user_limit:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                 />
-              </label>
+              </div>
 
-              <label>
-                Starts At
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Starts At
+                </label>
 
                 <input
                   type="datetime-local"
                   value={
                     couponForm.starts_at
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         starts_at:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                 />
-              </label>
+              </div>
 
-              <label>
-                Expires At
+              <div style={styles.field}>
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Expires At
+                </label>
 
                 <input
                   type="datetime-local"
                   value={
                     couponForm.expires_at
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         expires_at:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
+                  style={styles.input}
                 />
-              </label>
+              </div>
 
-              <label className="full">
-                Description
+              <div
+                className="full"
+                style={styles.field}
+              >
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Description
+                </label>
 
                 <textarea
                   rows="3"
                   value={
                     couponForm.description
                   }
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setCouponForm(
                       (current) => ({
                         ...current,
                         description:
-                          event.target.value,
+                          e.target
+                            .value,
                       })
                     )
                   }
-                  placeholder="Describe the promotion..."
+                  style={styles.textarea}
+                  placeholder="Describe this promotion..."
                 />
-              </label>
+              </div>
 
             </div>
 
-            <label className="admin-check-row">
-
+            <label
+              style={styles.check}
+            >
               <input
                 type="checkbox"
                 checked={
                   couponForm.is_active
                 }
-                onChange={(event) =>
+                onChange={(e) =>
                   setCouponForm(
                     (current) => ({
                       ...current,
                       is_active:
-                        event.target.checked,
+                        e.target
+                          .checked,
                     })
                   )
                 }
               />
 
-              <span>
+              <span
+                style={
+                  styles.checkLabel
+                }
+              >
                 Coupon is active
               </span>
-
             </label>
 
-            <div className="admin-modal-actions">
-
+            <div
+              className="sportiva-admin-modal-actions"
+              style={
+                styles.formActions
+              }
+            >
               <button
                 type="button"
-                className="admin-secondary-button"
                 onClick={() =>
-                  setShowCouponModal(false)
+                  setShowCouponModal(
+                    false
+                  )
+                }
+                style={
+                  styles.refreshButton
                 }
               >
                 Cancel
@@ -4296,8 +7415,10 @@ export default function Admin() {
 
               <button
                 type="submit"
-                className="admin-primary-button"
                 disabled={saving}
+                style={
+                  styles.refreshButton
+                }
               >
                 {saving
                   ? "Saving..."
@@ -4305,16 +7426,15 @@ export default function Admin() {
                   ? "Save Changes"
                   : "Create Coupon"}
               </button>
-
             </div>
 
           </form>
         </Modal>
       )}
 
-      {/* ========================================================
+      {/* =======================================================
           ANNOUNCEMENT MODAL
-      ======================================================== */}
+      ======================================================= */}
 
       {showAnnouncementModal && (
         <Modal
@@ -4327,64 +7447,88 @@ export default function Admin() {
           }
         >
           <form
-            className="admin-modal-form"
+            style={styles.form}
             onSubmit={
               createAnnouncement
             }
           >
 
-            <label>
-              Title
+            <div
+              style={{
+                ...styles.field,
+                marginBottom: 14,
+              }}
+            >
+              <label
+                style={
+                  styles.label
+                }
+              >
+                Title
+              </label>
 
               <input
-                type="text"
                 value={
                   announcementForm.title
                 }
-                onChange={(event) =>
+                onChange={(e) =>
                   setAnnouncementForm(
                     (current) => ({
                       ...current,
                       title:
-                        event.target.value,
+                        e.target.value,
                     })
                   )
                 }
-                placeholder="Weekend promotion"
+                style={styles.input}
                 required
               />
-            </label>
+            </div>
 
-            <label>
-              Message
+            <div
+              style={styles.field}
+            >
+              <label
+                style={
+                  styles.label
+                }
+              >
+                Message
+              </label>
 
               <textarea
                 rows="5"
                 value={
                   announcementForm.message
                 }
-                onChange={(event) =>
+                onChange={(e) =>
                   setAnnouncementForm(
                     (current) => ({
                       ...current,
                       message:
-                        event.target.value,
+                        e.target.value,
                     })
                   )
                 }
-                placeholder="Write the customer-facing message..."
+                style={styles.textarea}
               />
-            </label>
+            </div>
 
-            <div className="admin-modal-actions">
-
+            <div
+              className="sportiva-admin-modal-actions"
+              style={
+                styles.formActions
+              }
+            >
               <button
                 type="button"
-                className="admin-secondary-button"
                 onClick={() =>
                   setShowAnnouncementModal(
                     false
                   )
+                }
+                style={
+                  styles.refreshButton
                 }
               >
                 Cancel
@@ -4392,36 +7536,56 @@ export default function Admin() {
 
               <button
                 type="submit"
-                className="admin-primary-button"
+                style={
+                  styles.refreshButton
+                }
               >
-                <Megaphone size={15} />
+                <Megaphone
+                  size={14}
+                />
                 Publish
               </button>
-
             </div>
 
           </form>
         </Modal>
       )}
 
-      {/* ========================================================
+      {/* =======================================================
           POINTS MODAL
-      ======================================================== */}
+      ======================================================= */}
 
       {showPointsModal &&
         selectedMember && (
           <Modal
             eyebrow="REWARDS MANAGEMENT"
-            title="Adjust Member Points"
+            title="Adjust Points"
             onClose={() =>
               setShowPointsModal(
                 false
               )
             }
           >
-            <div className="admin-selected-member">
-
-              <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems:
+                  "center",
+                gap: 10,
+                margin:
+                  "18px 22px 0",
+                padding: 11,
+                border:
+                  "1px solid #e1e8e2",
+                borderRadius: 10,
+                background: "#fafcfb",
+              }}
+            >
+              <div
+                style={
+                  styles.avatar
+                }
+              >
                 {users
                   .find(
                     (user) =>
@@ -4429,11 +7593,18 @@ export default function Admin() {
                       selectedMember.user_id
                   )
                   ?.full_name?.charAt(0)
-                  ?.toUpperCase() || "U"}
+                  ?.toUpperCase() ||
+                  "U"}
               </div>
 
-              <section>
-                <strong>
+              <div>
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    fontSize: 10,
+                  }}
+                >
                   {
                     users.find(
                       (user) =>
@@ -4443,58 +7614,105 @@ export default function Admin() {
                   }
                 </strong>
 
-                <span>
-                  Current balance:{" "}
-                  {selectedMember.points ||
-                    0}{" "}
+                <small
+                  style={{
+                    display:
+                      "block",
+                    marginTop:
+                      3,
+                    color:
+                      COLORS.muted,
+                    fontSize: 8,
+                  }}
+                >
+                  Current:
+                  {" "}
+                  {
+                    selectedMember.points ||
+                    0
+                  }{" "}
                   points
-                </span>
-              </section>
-
+                </small>
+              </div>
             </div>
 
-            <div className="admin-modal-form">
+            <div
+              style={styles.form}
+            >
 
-              <label>
-                Points
+              <div
+                style={{
+                  ...styles.field,
+                  marginBottom: 14,
+                }}
+              >
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Points
+                </label>
 
                 <input
                   type="number"
                   min="1"
-                  value={pointsAmount}
-                  onChange={(event) =>
+                  value={
+                    pointsAmount
+                  }
+                  onChange={(e) =>
                     setPointsAmount(
-                      event.target.value
+                      e.target
+                        .value
                     )
                   }
+                  style={styles.input}
                   placeholder="10"
                 />
-              </label>
+              </div>
 
-              <label>
-                Reason
+              <div
+                style={styles.field}
+              >
+                <label
+                  style={
+                    styles.label
+                  }
+                >
+                  Reason
+                </label>
 
                 <textarea
                   rows="3"
-                  value={pointsReason}
-                  onChange={(event) =>
+                  value={
+                    pointsReason
+                  }
+                  onChange={(e) =>
                     setPointsReason(
-                      event.target.value
+                      e.target
+                        .value
                     )
                   }
+                  style={styles.textarea}
                   placeholder="Reason for adjustment..."
                 />
-              </label>
+              </div>
 
-              <div className="admin-modal-actions">
-
+              <div
+                className="sportiva-admin-modal-actions"
+                style={
+                  styles.formActions
+                }
+              >
                 <button
                   type="button"
-                  className="admin-secondary-button"
                   onClick={() =>
                     setShowPointsModal(
                       false
                     )
+                  }
+                  style={
+                    styles.refreshButton
                   }
                 >
                   Cancel
@@ -4502,32 +7720,47 @@ export default function Admin() {
 
                 <button
                   type="button"
-                  className="admin-secondary-button"
-                  onClick={() =>
-                    adjustPoints("remove")
-                  }
                   disabled={saving}
+                  onClick={() =>
+                    adjustPoints(
+                      "remove"
+                    )
+                  }
+                  style={{
+                    ...styles.refreshButton,
+                    color:
+                      COLORS.danger,
+                  }}
                 >
                   Deduct
                 </button>
 
                 <button
                   type="button"
-                  className="admin-primary-button"
-                  onClick={() =>
-                    adjustPoints("add")
-                  }
                   disabled={saving}
+                  onClick={() =>
+                    adjustPoints(
+                      "add"
+                    )
+                  }
+                  style={{
+                    ...styles.refreshButton,
+                    background:
+                      COLORS.green,
+                    color:
+                      "#fff",
+                    borderColor:
+                      COLORS.green,
+                  }}
                 >
                   Add Points
                 </button>
-
               </div>
 
             </div>
           </Modal>
         )}
 
-    </div>
+    </>
   );
 }
