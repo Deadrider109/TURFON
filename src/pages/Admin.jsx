@@ -3,18 +3,17 @@ import {
   Activity,
   CalendarDays,
   Check,
-  ChevronDown,
+  ChevronRight,
   ClipboardList,
   Clock3,
   Edit3,
-  Eye,
   Gift,
   LayoutDashboard,
   Megaphone,
   Plus,
   RefreshCw,
   Search,
-  Settings,
+  Settings2,
   ShieldCheck,
   TicketPercent,
   Trash2,
@@ -25,6 +24,49 @@ import {
 
 import { supabase } from "../lib/supabase";
 import "./Admin.css";
+
+const NAVIGATION = [
+  {
+    id: "overview",
+    label: "Overview",
+    icon: LayoutDashboard,
+  },
+  {
+    id: "turfs",
+    label: "Turfs",
+    icon: Trophy,
+  },
+  {
+    id: "slots",
+    label: "Time Slots",
+    icon: CalendarDays,
+  },
+  {
+    id: "bookings",
+    label: "Bookings",
+    icon: ClipboardList,
+  },
+  {
+    id: "users",
+    label: "Users",
+    icon: Users,
+  },
+  {
+    id: "rewards",
+    label: "Rewards",
+    icon: Gift,
+  },
+  {
+    id: "coupons",
+    label: "Coupons",
+    icon: TicketPercent,
+  },
+  {
+    id: "announcements",
+    label: "Announcements",
+    icon: Megaphone,
+  },
+];
 
 const EMPTY_TURF = {
   name: "",
@@ -39,11 +81,6 @@ const EMPTY_SLOT = {
   start_time: "",
   end_time: "",
   is_available: true,
-};
-
-const EMPTY_ANNOUNCEMENT = {
-  title: "",
-  message: "",
 };
 
 const EMPTY_COUPON = {
@@ -61,33 +98,21 @@ const EMPTY_COUPON = {
   is_active: true,
 };
 
-const EMPTY_MILESTONE = {
+const EMPTY_ANNOUNCEMENT = {
   title: "",
-  description: "",
-  points_required: "",
-  is_active: true,
+  message: "",
 };
 
-const EMPTY_OFFER = {
-  title: "",
-  description: "",
-  required_points: "",
-  benefit: "",
-  discount_type: "percentage",
-  discount_value: "",
-  is_active: true,
-};
+function formatDate(date) {
+  if (!date) return "—";
 
-function formatDate(value) {
-  if (!value) return "—";
+  const value = new Date(`${date}T00:00:00`);
 
-  const date = new Date(`${value}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
+  if (Number.isNaN(value.getTime())) {
+    return date;
   }
 
-  return date.toLocaleDateString("en-US", {
+  return value.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -115,18 +140,21 @@ function formatDateTime(value) {
 function formatTime(value) {
   if (!value) return "—";
 
-  const [hourString, minuteString] = String(value).split(":");
-  const hour = Number(hourString);
+  const parts = String(value).split(":");
+  const hour = Number(parts[0]);
+  const minute = parts[1] || "00";
 
-  if (!Number.isFinite(hour)) return value;
+  if (!Number.isFinite(hour)) {
+    return value;
+  }
 
   const period = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
 
-  return `${displayHour}:${minuteString || "00"} ${period}`;
+  return `${displayHour}:${minute} ${period}`;
 }
 
-function toDateTimeInput(value) {
+function formatInputDateTime(value) {
   if (!value) return "";
 
   const date = new Date(value);
@@ -154,30 +182,100 @@ function toISOStringOrNull(value) {
 }
 
 function generateCouponCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const characters =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
   let code = "SPORTIVA-";
 
-  for (let i = 0; i < 6; i += 1) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+  for (let index = 0; index < 6; index += 1) {
+    code +=
+      characters[
+        Math.floor(
+          Math.random() * characters.length
+        )
+      ];
   }
 
   return code;
 }
 
-function StatusBadge({ children, type = "default" }) {
+function StatusBadge({ type = "neutral", children }) {
   return (
-    <span className={`admin-status-badge ${type}`}>
+    <span className={`admin-status ${type}`}>
       {children}
     </span>
   );
 }
 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}) {
+  return (
+    <div className="admin-stat-card">
+      <div className="admin-stat-icon">
+        <Icon size={18} />
+      </div>
+
+      <div className="admin-stat-content">
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+      </div>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  eyebrow,
+  children,
+  onClose,
+  wide = false,
+}) {
+  return (
+    <div
+      className="admin-modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className={`admin-modal ${
+          wide ? "admin-modal-wide" : ""
+        }`}
+      >
+        <div className="admin-modal-header">
+          <div>
+            <span>{eyebrow}</span>
+            <h2>{title}</h2>
+          </div>
+
+          <button
+            type="button"
+            className="admin-modal-close"
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState("overview");
-  const [rewardTab, setRewardTab] = useState("overview");
+  const [activeSection, setActiveSection] =
+    useState("overview");
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState("");
 
   const [turfs, setTurfs] = useState([]);
@@ -186,156 +284,198 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
 
-  const [memberRewards, setMemberRewards] = useState([]);
-  const [rewardTransactions, setRewardTransactions] = useState([]);
-  const [rewardRedemptions, setRewardRedemptions] = useState([]);
-  const [rewardCheckpoints, setRewardCheckpoints] = useState([]);
-  const [communityOffers, setCommunityOffers] = useState([]);
-
   const [coupons, setCoupons] = useState([]);
   const [couponUsages, setCouponUsages] = useState([]);
 
-  const [showTurfForm, setShowTurfForm] = useState(false);
+  const [memberRewards, setMemberRewards] = useState([]);
+  const [rewardCheckpoints, setRewardCheckpoints] =
+    useState([]);
+  const [communityOffers, setCommunityOffers] =
+    useState([]);
+  const [rewardTransactions, setRewardTransactions] =
+    useState([]);
+  const [rewardRedemptions, setRewardRedemptions] =
+    useState([]);
+
+  const [rewardSection, setRewardSection] =
+    useState("members");
+
+  const [turfSearch, setTurfSearch] = useState("");
+  const [slotSearch, setSlotSearch] = useState("");
+  const [slotDate, setSlotDate] = useState("");
+  const [slotTurf, setSlotTurf] = useState("all");
+
+  const [bookingSearch, setBookingSearch] =
+    useState("");
+  const [bookingStatus, setBookingStatus] =
+    useState("all");
+
+  const [userSearch, setUserSearch] = useState("");
+  const [couponSearch, setCouponSearch] =
+    useState("");
+
+  const [showTurfModal, setShowTurfModal] =
+    useState(false);
   const [editingTurf, setEditingTurf] = useState(null);
-  const [turfForm, setTurfForm] = useState(EMPTY_TURF);
+  const [turfForm, setTurfForm] =
+    useState(EMPTY_TURF);
 
-  const [showSlotForm, setShowSlotForm] = useState(false);
+  const [showSlotModal, setShowSlotModal] =
+    useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
-  const [slotForm, setSlotForm] = useState(EMPTY_SLOT);
+  const [slotForm, setSlotForm] =
+    useState(EMPTY_SLOT);
 
-  const [showAnnouncementForm, setShowAnnouncementForm] =
+  const [showCouponModal, setShowCouponModal] =
+    useState(false);
+  const [editingCoupon, setEditingCoupon] =
+    useState(null);
+  const [couponForm, setCouponForm] =
+    useState(EMPTY_COUPON);
+
+  const [showAnnouncementModal, setShowAnnouncementModal] =
     useState(false);
   const [announcementForm, setAnnouncementForm] =
     useState(EMPTY_ANNOUNCEMENT);
 
-  const [showCouponForm, setShowCouponForm] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState(null);
-  const [couponForm, setCouponForm] = useState(EMPTY_COUPON);
-
-  const [showMilestoneForm, setShowMilestoneForm] =
+  const [showPointsModal, setShowPointsModal] =
     useState(false);
-  const [editingMilestone, setEditingMilestone] = useState(null);
-  const [milestoneForm, setMilestoneForm] =
-    useState(EMPTY_MILESTONE);
-
-  const [showOfferForm, setShowOfferForm] = useState(false);
-  const [editingOffer, setEditingOffer] = useState(null);
-  const [offerForm, setOfferForm] = useState(EMPTY_OFFER);
-
-  const [showPointsModal, setShowPointsModal] = useState(false);
-  const [selectedRewardMember, setSelectedRewardMember] =
+  const [selectedMember, setSelectedMember] =
     useState(null);
-  const [pointsAmount, setPointsAmount] = useState("");
-  const [pointsReason, setPointsReason] = useState("");
-
-  const [turfFilter, setTurfFilter] = useState("all");
-  const [slotDateFilter, setSlotDateFilter] = useState("");
-  const [slotSearch, setSlotSearch] = useState("");
-
-  const [bookingSearch, setBookingSearch] = useState("");
-  const [bookingStatusFilter, setBookingStatusFilter] =
-    useState("all");
-
-  const [userSearch, setUserSearch] = useState("");
-  const [couponSearch, setCouponSearch] = useState("");
-  const [rewardSearch, setRewardSearch] = useState("");
+  const [pointsAmount, setPointsAmount] =
+    useState("");
+  const [pointsReason, setPointsReason] =
+    useState("");
 
   const [saving, setSaving] = useState(false);
 
-  function showMessage(text) {
+  function notify(text) {
     setMessage(text);
 
-    window.clearTimeout(showMessage.timeoutId);
+    window.clearTimeout(notify.timeout);
 
-    showMessage.timeoutId = window.setTimeout(() => {
+    notify.timeout = window.setTimeout(() => {
       setMessage("");
     }, 3500);
   }
 
-  async function loadData() {
-    setLoading(true);
+  async function loadData(options = {}) {
+    const isRefresh = Boolean(options.refresh);
+
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
     try {
-      const [
-        turfsResult,
-        slotsResult,
-        bookingsResult,
-        profilesResult,
-        announcementsResult,
-        memberRewardsResult,
-        rewardTransactionsResult,
-        rewardRedemptionsResult,
-        checkpointsResult,
-        offersResult,
-        couponsResult,
-        couponUsagesResult,
-      ] = await Promise.all([
+      const results = await Promise.all([
         supabase
           .from("turfs")
           .select("*")
-          .order("created_at", { ascending: false }),
+          .order("created_at", {
+            ascending: false,
+          }),
 
         supabase
           .from("time_slots")
           .select("*, turfs(name)")
-          .order("slot_date", { ascending: true })
-          .order("start_time", { ascending: true }),
+          .order("slot_date", {
+            ascending: true,
+          })
+          .order("start_time", {
+            ascending: true,
+          }),
 
         supabase
           .from("bookings")
           .select(
             "*, turfs(name), profiles(full_name, phone, email)"
           )
-          .order("created_at", { ascending: false }),
+          .order("created_at", {
+            ascending: false,
+          }),
 
         supabase
           .from("profiles")
           .select("*")
-          .order("created_at", { ascending: false }),
+          .order("created_at", {
+            ascending: false,
+          }),
 
         supabase
           .from("announcements")
           .select("*")
-          .order("created_at", { ascending: false }),
+          .order("created_at", {
+            ascending: false,
+          }),
+
+        supabase
+          .from("coupons")
+          .select("*")
+          .order("created_at", {
+            ascending: false,
+          }),
+
+        supabase
+          .from("coupon_usages")
+          .select("*")
+          .order("created_at", {
+            ascending: false,
+          }),
 
         supabase
           .from("member_rewards")
           .select("*")
-          .order("points", { ascending: false }),
+          .order("points", {
+            ascending: false,
+          }),
+
+        supabase
+          .from("reward_checkpoints")
+          .select("*")
+          .order("points_required", {
+            ascending: true,
+          }),
+
+        supabase
+          .from("community_offers")
+          .select("*")
+          .order("required_points", {
+            ascending: true,
+          }),
 
         supabase
           .from("reward_transactions")
           .select("*")
-          .order("created_at", { ascending: false })
+          .order("created_at", {
+            ascending: false,
+          })
           .limit(200),
 
         supabase
           .from("reward_redemptions")
           .select("*")
-          .order("created_at", { ascending: false })
+          .order("created_at", {
+            ascending: false,
+          })
           .limit(200),
-
-        supabase
-          .from("reward_checkpoints")
-          .select("*")
-          .order("points_required", { ascending: true }),
-
-        supabase
-          .from("community_offers")
-          .select("*")
-          .order("required_points", { ascending: true }),
-
-        supabase
-          .from("coupons")
-          .select("*")
-          .order("created_at", { ascending: false }),
-
-        supabase
-          .from("coupon_usages")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(500),
       ]);
+
+      const [
+        turfsResult,
+        slotsResult,
+        bookingsResult,
+        usersResult,
+        announcementsResult,
+        couponsResult,
+        usagesResult,
+        rewardsResult,
+        checkpointsResult,
+        offersResult,
+        transactionsResult,
+        redemptionsResult,
+      ] = results;
 
       if (!turfsResult.error) {
         setTurfs(turfsResult.data || []);
@@ -349,27 +489,32 @@ export default function Admin() {
         setBookings(bookingsResult.data || []);
       }
 
-      if (!profilesResult.error) {
-        setUsers(profilesResult.data || []);
+      if (!usersResult.error) {
+        setUsers(usersResult.data || []);
       }
 
       if (!announcementsResult.error) {
-        setAnnouncements(announcementsResult.data || []);
-      }
-
-      if (!memberRewardsResult.error) {
-        setMemberRewards(memberRewardsResult.data || []);
-      }
-
-      if (!rewardTransactionsResult.error) {
-        setRewardTransactions(
-          rewardTransactionsResult.data || []
+        setAnnouncements(
+          announcementsResult.data || []
         );
       }
 
-      if (!rewardRedemptionsResult.error) {
-        setRewardRedemptions(
-          rewardRedemptionsResult.data || []
+      if (!couponsResult.error) {
+        setCoupons(couponsResult.data || []);
+      } else {
+        console.error(
+          "Coupons:",
+          couponsResult.error
+        );
+      }
+
+      if (!usagesResult.error) {
+        setCouponUsages(usagesResult.data || []);
+      }
+
+      if (!rewardsResult.error) {
+        setMemberRewards(
+          rewardsResult.data || []
         );
       }
 
@@ -380,51 +525,39 @@ export default function Admin() {
       }
 
       if (!offersResult.error) {
-        setCommunityOffers(offersResult.data || []);
-      }
-
-      if (!couponsResult.error) {
-        setCoupons(couponsResult.data || []);
-      } else {
-        console.error(
-          "Coupons load error:",
-          couponsResult.error
+        setCommunityOffers(
+          offersResult.data || []
         );
       }
 
-      if (!couponUsagesResult.error) {
-        setCouponUsages(couponUsagesResult.data || []);
+      if (!transactionsResult.error) {
+        setRewardTransactions(
+          transactionsResult.data || []
+        );
       }
 
-      const errors = [
-        turfsResult.error,
-        slotsResult.error,
-        bookingsResult.error,
-        profilesResult.error,
-        announcementsResult.error,
-        memberRewardsResult.error,
-        rewardTransactionsResult.error,
-        rewardRedemptionsResult.error,
-        checkpointsResult.error,
-        offersResult.error,
-      ].filter(Boolean);
-
-      if (errors.length > 0) {
-        console.error("Admin data errors:", errors);
+      if (!redemptionsResult.error) {
+        setRewardRedemptions(
+          redemptionsResult.data || []
+        );
       }
     } catch (error) {
-      console.error("Admin load error:", error);
-      showMessage(error.message || "Failed to load admin data.");
+      console.error(error);
+      notify(
+        error.message ||
+          "Unable to load admin dashboard."
+      );
     }
 
     setLoading(false);
+    setRefreshing(false);
   }
 
   useEffect(() => {
     loadData();
 
     const channel = supabase
-      .channel("sportiva-admin-live")
+      .channel("sportiva-admin-updates")
       .on(
         "postgres_changes",
         {
@@ -448,15 +581,6 @@ export default function Admin() {
         {
           event: "*",
           schema: "public",
-          table: "member_rewards",
-        },
-        () => loadData()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
           table: "coupons",
         },
         () => loadData()
@@ -472,34 +596,31 @@ export default function Admin() {
   // TURFS
   // ============================================================
 
-  function openCreateTurf() {
+  function createTurf() {
     setEditingTurf(null);
     setTurfForm(EMPTY_TURF);
-    setShowTurfForm(true);
+    setShowTurfModal(true);
   }
 
-  function openEditTurf(turf) {
+  function editTurf(turf) {
     setEditingTurf(turf);
 
     setTurfForm({
       name: turf.name || "",
       description: turf.description || "",
       price_per_hour:
-        turf.price_per_hour === null ||
-        turf.price_per_hour === undefined
-          ? ""
-          : String(turf.price_per_hour),
+        turf.price_per_hour ?? "",
       image_url: turf.image_url || "",
     });
 
-    setShowTurfForm(true);
+    setShowTurfModal(true);
   }
 
   async function saveTurf(event) {
     event.preventDefault();
 
     if (!turfForm.name.trim()) {
-      showMessage("Turf name is required.");
+      notify("Turf name is required.");
       return;
     }
 
@@ -507,7 +628,7 @@ export default function Admin() {
       !turfForm.price_per_hour ||
       Number(turfForm.price_per_hour) <= 0
     ) {
-      showMessage("Enter a valid turf price.");
+      notify("Enter a valid price.");
       return;
     }
 
@@ -515,44 +636,42 @@ export default function Admin() {
 
     const payload = {
       name: turfForm.name.trim(),
-      description: turfForm.description.trim() || null,
-      price_per_hour: Number(turfForm.price_per_hour),
-      image_url: turfForm.image_url.trim() || null,
+      description:
+        turfForm.description.trim() || null,
+      price_per_hour: Number(
+        turfForm.price_per_hour
+      ),
+      image_url:
+        turfForm.image_url.trim() || null,
     };
 
-    let result;
-
-    if (editingTurf) {
-      result = await supabase
-        .from("turfs")
-        .update(payload)
-        .eq("id", editingTurf.id);
-    } else {
-      result = await supabase
-        .from("turfs")
-        .insert([
+    const result = editingTurf
+      ? await supabase
+          .from("turfs")
+          .update(payload)
+          .eq("id", editingTurf.id)
+      : await supabase.from("turfs").insert([
           {
             ...payload,
             is_active: true,
           },
         ]);
-    }
 
     setSaving(false);
 
     if (result.error) {
-      showMessage(result.error.message);
+      notify(result.error.message);
       return;
     }
 
-    setShowTurfForm(false);
+    setShowTurfModal(false);
     setEditingTurf(null);
     setTurfForm(EMPTY_TURF);
 
-    showMessage(
+    notify(
       editingTurf
-        ? "Turf updated successfully."
-        : "Turf created successfully."
+        ? "Turf updated."
+        : "Turf created."
     );
 
     await loadData();
@@ -567,11 +686,11 @@ export default function Admin() {
       .eq("id", turf.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage(
+    notify(
       turf.is_active
         ? "Turf disabled."
         : "Turf activated."
@@ -583,7 +702,7 @@ export default function Admin() {
   async function deleteTurf(turf) {
     if (
       !window.confirm(
-        `Delete "${turf.name}"? Existing bookings may be affected.`
+        `Delete "${turf.name}"?`
       )
     ) {
       return;
@@ -595,19 +714,19 @@ export default function Admin() {
       .eq("id", turf.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage("Turf deleted.");
+    notify("Turf deleted.");
     await loadData();
   }
 
   // ============================================================
-  // TIME SLOTS
+  // SLOTS
   // ============================================================
 
-  function openCreateSlot() {
+  function createSlot() {
     setEditingSlot(null);
 
     setSlotForm({
@@ -620,44 +739,48 @@ export default function Admin() {
         .slice(0, 10),
     });
 
-    setShowSlotForm(true);
+    setShowSlotModal(true);
   }
 
-  function openEditSlot(slot) {
+  function editSlot(slot) {
     setEditingSlot(slot);
 
     setSlotForm({
-      turf_id: String(slot.turf_id || ""),
+      turf_id: String(
+        slot.turf_id || ""
+      ),
       slot_date: slot.slot_date || "",
-      start_time: String(slot.start_time || "").slice(
-        0,
-        5
-      ),
-      end_time: String(slot.end_time || "").slice(
-        0,
-        5
-      ),
-      is_available: slot.is_available ?? true,
+      start_time: String(
+        slot.start_time || ""
+      ).slice(0, 5),
+      end_time: String(
+        slot.end_time || ""
+      ).slice(0, 5),
+      is_available:
+        slot.is_available ?? true,
     });
 
-    setShowSlotForm(true);
+    setShowSlotModal(true);
   }
 
   async function saveSlot(event) {
     event.preventDefault();
 
-    if (!slotForm.turf_id || !slotForm.slot_date) {
-      showMessage("Turf and date are required.");
+    if (
+      !slotForm.turf_id ||
+      !slotForm.slot_date ||
+      !slotForm.start_time ||
+      !slotForm.end_time
+    ) {
+      notify("Complete all slot fields.");
       return;
     }
 
-    if (!slotForm.start_time || !slotForm.end_time) {
-      showMessage("Start and end time are required.");
-      return;
-    }
-
-    if (slotForm.end_time <= slotForm.start_time) {
-      showMessage("End time must be after start time.");
+    if (
+      slotForm.end_time <=
+      slotForm.start_time
+    ) {
+      notify("End time must be after start time.");
       return;
     }
 
@@ -668,34 +791,32 @@ export default function Admin() {
       slot_date: slotForm.slot_date,
       start_time: slotForm.start_time,
       end_time: slotForm.end_time,
-      is_available: Boolean(slotForm.is_available),
+      is_available: Boolean(
+        slotForm.is_available
+      ),
     };
 
-    let result;
-
-    if (editingSlot) {
-      result = await supabase
-        .from("time_slots")
-        .update(payload)
-        .eq("id", editingSlot.id);
-    } else {
-      result = await supabase
-        .from("time_slots")
-        .insert([payload]);
-    }
+    const result = editingSlot
+      ? await supabase
+          .from("time_slots")
+          .update(payload)
+          .eq("id", editingSlot.id)
+      : await supabase
+          .from("time_slots")
+          .insert([payload]);
 
     setSaving(false);
 
     if (result.error) {
-      showMessage(result.error.message);
+      notify(result.error.message);
       return;
     }
 
-    setShowSlotForm(false);
+    setShowSlotModal(false);
     setEditingSlot(null);
     setSlotForm(EMPTY_SLOT);
 
-    showMessage(
+    notify(
       editingSlot
         ? "Time slot updated."
         : "Time slot created."
@@ -713,21 +834,25 @@ export default function Admin() {
       .eq("id", slot.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage(
+    notify(
       slot.is_available
-        ? "Time slot disabled."
-        : "Time slot enabled."
+        ? "Slot disabled."
+        : "Slot enabled."
     );
 
     await loadData();
   }
 
   async function deleteSlot(slot) {
-    if (!window.confirm("Delete this time slot?")) {
+    if (
+      !window.confirm(
+        "Delete this time slot?"
+      )
+    ) {
       return;
     }
 
@@ -737,11 +862,11 @@ export default function Admin() {
       .eq("id", slot.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage("Time slot deleted.");
+    notify("Time slot deleted.");
     await loadData();
   }
 
@@ -749,20 +874,21 @@ export default function Admin() {
   // BOOKINGS
   // ============================================================
 
-  async function updateBookingStatus(booking, status) {
+  async function setBookingStatus(
+    booking,
+    status
+  ) {
     const { error } = await supabase
       .from("bookings")
-      .update({
-        status,
-      })
+      .update({ status })
       .eq("id", booking.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage(
+    notify(
       status === "confirmed"
         ? "Booking confirmed."
         : "Booking cancelled."
@@ -772,88 +898,10 @@ export default function Admin() {
   }
 
   // ============================================================
-  // ANNOUNCEMENTS
-  // ============================================================
-
-  async function createAnnouncement(event) {
-    event.preventDefault();
-
-    if (!announcementForm.title.trim()) {
-      showMessage("Announcement title is required.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("announcements")
-      .insert([
-        {
-          title: announcementForm.title.trim(),
-          message:
-            announcementForm.message.trim() || null,
-          is_active: true,
-        },
-      ]);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    setAnnouncementForm(EMPTY_ANNOUNCEMENT);
-    setShowAnnouncementForm(false);
-
-    showMessage("Announcement published.");
-    await loadData();
-  }
-
-  async function toggleAnnouncement(announcement) {
-    const { error } = await supabase
-      .from("announcements")
-      .update({
-        is_active: !announcement.is_active,
-      })
-      .eq("id", announcement.id);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    showMessage(
-      announcement.is_active
-        ? "Announcement disabled."
-        : "Announcement activated."
-    );
-
-    await loadData();
-  }
-
-  async function deleteAnnouncement(announcement) {
-    if (
-      !window.confirm("Delete this announcement?")
-    ) {
-      return;
-    }
-
-    const { error } = await supabase
-      .from("announcements")
-      .delete()
-      .eq("id", announcement.id);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    showMessage("Announcement deleted.");
-    await loadData();
-  }
-
-  // ============================================================
   // COUPONS
   // ============================================================
 
-  function openCreateCoupon() {
+  function createCoupon() {
     setEditingCoupon(null);
 
     setCouponForm({
@@ -861,10 +909,10 @@ export default function Admin() {
       code: generateCouponCode(),
     });
 
-    setShowCouponForm(true);
+    setShowCouponModal(true);
   }
 
-  function openEditCoupon(coupon) {
+  function editCoupon(coupon) {
     setEditingCoupon(coupon);
 
     setCouponForm({
@@ -872,38 +920,29 @@ export default function Admin() {
       title: coupon.title || "",
       description: coupon.description || "",
       discount_type:
-        coupon.discount_type || "percentage",
+        coupon.discount_type ||
+        "percentage",
       discount_value:
-        coupon.discount_value === null ||
-        coupon.discount_value === undefined
-          ? ""
-          : String(coupon.discount_value),
+        coupon.discount_value ?? "",
       min_booking_amount:
-        coupon.min_booking_amount === null ||
-        coupon.min_booking_amount === undefined
-          ? "0"
-          : String(coupon.min_booking_amount),
+        coupon.min_booking_amount ?? "0",
       max_discount_amount:
-        coupon.max_discount_amount === null ||
-        coupon.max_discount_amount === undefined
-          ? ""
-          : String(coupon.max_discount_amount),
+        coupon.max_discount_amount ?? "",
       usage_limit:
-        coupon.usage_limit === null ||
-        coupon.usage_limit === undefined
-          ? ""
-          : String(coupon.usage_limit),
+        coupon.usage_limit ?? "",
       per_user_limit:
-        coupon.per_user_limit === null ||
-        coupon.per_user_limit === undefined
-          ? "1"
-          : String(coupon.per_user_limit),
-      starts_at: toDateTimeInput(coupon.starts_at),
-      expires_at: toDateTimeInput(coupon.expires_at),
-      is_active: coupon.is_active ?? true,
+        coupon.per_user_limit ?? "1",
+      starts_at: formatInputDateTime(
+        coupon.starts_at
+      ),
+      expires_at: formatInputDateTime(
+        coupon.expires_at
+      ),
+      is_active:
+        coupon.is_active ?? true,
     });
 
-    setShowCouponForm(true);
+    setShowCouponModal(true);
   }
 
   async function saveCoupon(event) {
@@ -918,7 +957,7 @@ export default function Admin() {
     );
 
     if (!code) {
-      showMessage("Coupon code is required.");
+      notify("Coupon code is required.");
       return;
     }
 
@@ -926,15 +965,18 @@ export default function Admin() {
       !Number.isFinite(discountValue) ||
       discountValue <= 0
     ) {
-      showMessage("Enter a valid discount value.");
+      notify("Enter a valid discount.");
       return;
     }
 
     if (
-      couponForm.discount_type === "percentage" &&
+      couponForm.discount_type ===
+        "percentage" &&
       discountValue > 100
     ) {
-      showMessage("Percentage cannot exceed 100%.");
+      notify(
+        "Percentage discount cannot exceed 100%."
+      );
       return;
     }
 
@@ -944,8 +986,8 @@ export default function Admin() {
       new Date(couponForm.expires_at) <=
         new Date(couponForm.starts_at)
     ) {
-      showMessage(
-        "Coupon expiry must be after its start date."
+      notify(
+        "Expiry must be after the start date."
       );
       return;
     }
@@ -961,14 +1003,17 @@ export default function Admin() {
       title:
         couponForm.title.trim() || code,
       description:
-        couponForm.description.trim() || null,
-      discount_type: couponForm.discount_type,
+        couponForm.description.trim() ||
+        null,
+      discount_type:
+        couponForm.discount_type,
       discount_value: discountValue,
       min_booking_amount: Number(
         couponForm.min_booking_amount || 0
       ),
       max_discount_amount:
-        couponForm.discount_type === "percentage" &&
+        couponForm.discount_type ===
+          "percentage" &&
         couponForm.max_discount_amount
           ? Number(
               couponForm.max_discount_amount
@@ -986,55 +1031,52 @@ export default function Admin() {
       expires_at: toISOStringOrNull(
         couponForm.expires_at
       ),
-      is_active: Boolean(couponForm.is_active),
+      is_active: Boolean(
+        couponForm.is_active
+      ),
     };
 
-    let result;
-
-    if (editingCoupon) {
-      result = await supabase
-        .from("coupons")
-        .update(payload)
-        .eq("id", editingCoupon.id);
-    } else {
-      result = await supabase
-        .from("coupons")
-        .insert([
+    const result = editingCoupon
+      ? await supabase
+          .from("coupons")
+          .update(payload)
+          .eq("id", editingCoupon.id)
+      : await supabase.from("coupons").insert([
           {
             ...payload,
             created_by: user?.id || null,
           },
         ]);
-    }
 
     setSaving(false);
 
     if (result.error) {
-      const errorText =
-        result.error.message?.toLowerCase() || "";
+      const text =
+        result.error.message?.toLowerCase() ||
+        "";
 
       if (
-        errorText.includes("duplicate") ||
-        errorText.includes("unique")
+        text.includes("duplicate") ||
+        text.includes("unique")
       ) {
-        showMessage(
+        notify(
           "That coupon code already exists."
         );
       } else {
-        showMessage(result.error.message);
+        notify(result.error.message);
       }
 
       return;
     }
 
-    setShowCouponForm(false);
+    setShowCouponModal(false);
     setEditingCoupon(null);
     setCouponForm(EMPTY_COUPON);
 
-    showMessage(
+    notify(
       editingCoupon
-        ? "Coupon updated successfully."
-        : "Coupon created successfully."
+        ? "Coupon updated."
+        : "Coupon created."
     );
 
     await loadData();
@@ -1049,11 +1091,11 @@ export default function Admin() {
       .eq("id", coupon.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage(
+    notify(
       coupon.is_active
         ? "Coupon disabled."
         : "Coupon activated."
@@ -1065,7 +1107,7 @@ export default function Admin() {
   async function deleteCoupon(coupon) {
     if (
       !window.confirm(
-        `Delete coupon "${coupon.code}"?`
+        `Delete "${coupon.code}"?`
       )
     ) {
       return;
@@ -1077,84 +1119,178 @@ export default function Admin() {
       .eq("id", coupon.id);
 
     if (error) {
-      showMessage(error.message);
+      notify(error.message);
       return;
     }
 
-    showMessage("Coupon deleted.");
+    notify("Coupon deleted.");
     await loadData();
   }
 
-  async function copyCouponCode(code) {
+  async function copyCoupon(code) {
     try {
       await navigator.clipboard.writeText(code);
-      showMessage(`${code} copied.`);
+      notify(`${code} copied.`);
     } catch {
-      showMessage("Could not copy coupon code.");
+      notify("Could not copy coupon.");
     }
+  }
+
+  // ============================================================
+  // ANNOUNCEMENTS
+  // ============================================================
+
+  async function createAnnouncement(event) {
+    event.preventDefault();
+
+    if (!announcementForm.title.trim()) {
+      notify("Announcement title is required.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("announcements")
+      .insert([
+        {
+          title:
+            announcementForm.title.trim(),
+          message:
+            announcementForm.message.trim() ||
+            null,
+          is_active: true,
+        },
+      ]);
+
+    if (error) {
+      notify(error.message);
+      return;
+    }
+
+    setShowAnnouncementModal(false);
+    setAnnouncementForm(
+      EMPTY_ANNOUNCEMENT
+    );
+
+    notify("Announcement published.");
+    await loadData();
+  }
+
+  async function toggleAnnouncement(
+    announcement
+  ) {
+    const { error } = await supabase
+      .from("announcements")
+      .update({
+        is_active: !announcement.is_active,
+      })
+      .eq("id", announcement.id);
+
+    if (error) {
+      notify(error.message);
+      return;
+    }
+
+    notify(
+      announcement.is_active
+        ? "Announcement disabled."
+        : "Announcement activated."
+    );
+
+    await loadData();
+  }
+
+  async function deleteAnnouncement(
+    announcement
+  ) {
+    if (
+      !window.confirm(
+        "Delete this announcement?"
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("announcements")
+      .delete()
+      .eq("id", announcement.id);
+
+    if (error) {
+      notify(error.message);
+      return;
+    }
+
+    notify("Announcement deleted.");
+    await loadData();
   }
 
   // ============================================================
   // REWARDS
   // ============================================================
 
-  function openAdjustPoints(member) {
-    setSelectedRewardMember(member);
+  function openPoints(member) {
+    setSelectedMember(member);
     setPointsAmount("");
     setPointsReason("");
     setShowPointsModal(true);
   }
 
   async function adjustPoints(mode) {
-    if (!selectedRewardMember) return;
+    if (!selectedMember) return;
 
     const amount = Number(pointsAmount);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showMessage("Enter a valid points amount.");
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      notify("Enter a valid points amount.");
       return;
     }
 
-    const signedPoints =
-      mode === "add" ? amount : -amount;
-
     setSaving(true);
 
-    const currentPoints = Number(
-      selectedRewardMember.points || 0
+    const current = Number(
+      selectedMember.points || 0
     );
 
-    const currentLifetime = Number(
-      selectedRewardMember.lifetime_points || 0
+    const lifetime = Number(
+      selectedMember.lifetime_points || 0
     );
 
-    const newPoints = Math.max(
+    const delta =
+      mode === "add" ? amount : -amount;
+
+    const nextPoints = Math.max(
       0,
-      currentPoints + signedPoints
+      current + delta
     );
 
-    const newLifetime =
+    const nextLifetime =
       mode === "add"
-        ? currentLifetime + amount
-        : currentLifetime;
+        ? lifetime + amount
+        : lifetime;
 
-    const { error: rewardError } = await supabase
-      .from("member_rewards")
-      .upsert(
-        {
-          user_id: selectedRewardMember.user_id,
-          points: newPoints,
-          lifetime_points: newLifetime,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "user_id",
-        }
-      );
+    const { error: updateError } =
+      await supabase
+        .from("member_rewards")
+        .upsert(
+          {
+            user_id:
+              selectedMember.user_id,
+            points: nextPoints,
+            lifetime_points: nextLifetime,
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict: "user_id",
+          }
+        );
 
-    if (rewardError) {
+    if (updateError) {
       setSaving(false);
-      showMessage(rewardError.message);
+      notify(updateError.message);
       return;
     }
 
@@ -1163,8 +1299,9 @@ export default function Admin() {
         .from("reward_transactions")
         .insert([
           {
-            user_id: selectedRewardMember.user_id,
-            points: signedPoints,
+            user_id:
+              selectedMember.user_id,
+            points: delta,
             type:
               mode === "add"
                 ? "admin_adjustment"
@@ -1180,14 +1317,14 @@ export default function Admin() {
     setSaving(false);
 
     if (transactionError) {
-      showMessage(transactionError.message);
+      notify(transactionError.message);
       return;
     }
 
     setShowPointsModal(false);
-    setSelectedRewardMember(null);
+    setSelectedMember(null);
 
-    showMessage(
+    notify(
       mode === "add"
         ? `${amount} points added.`
         : `${amount} points deducted.`
@@ -1196,367 +1333,58 @@ export default function Admin() {
     await loadData();
   }
 
-  function openCreateMilestone() {
-    setEditingMilestone(null);
-    setMilestoneForm(EMPTY_MILESTONE);
-    setShowMilestoneForm(true);
-  }
-
-  function openEditMilestone(item) {
-    setEditingMilestone(item);
-
-    setMilestoneForm({
-      title: item.title || "",
-      description: item.description || "",
-      points_required:
-        item.points_required === null ||
-        item.points_required === undefined
-          ? ""
-          : String(item.points_required),
-      is_active: item.is_active ?? true,
-    });
-
-    setShowMilestoneForm(true);
-  }
-
-  async function saveMilestone(event) {
-    event.preventDefault();
-
-    const points = Number(
-      milestoneForm.points_required
-    );
-
-    if (!milestoneForm.title.trim()) {
-      showMessage("Milestone title is required.");
-      return;
-    }
-
-    if (!Number.isFinite(points) || points < 0) {
-      showMessage("Enter valid milestone points.");
-      return;
-    }
-
-    const payload = {
-      title: milestoneForm.title.trim(),
-      description:
-        milestoneForm.description.trim() || null,
-      points_required: points,
-      is_active: Boolean(milestoneForm.is_active),
-    };
-
-    let result;
-
-    if (editingMilestone) {
-      result = await supabase
-        .from("reward_checkpoints")
-        .update(payload)
-        .eq("id", editingMilestone.id);
-    } else {
-      result = await supabase
-        .from("reward_checkpoints")
-        .insert([payload]);
-    }
-
-    if (result.error) {
-      showMessage(result.error.message);
-      return;
-    }
-
-    setShowMilestoneForm(false);
-    setEditingMilestone(null);
-    setMilestoneForm(EMPTY_MILESTONE);
-
-    showMessage(
-      editingMilestone
-        ? "Milestone updated."
-        : "Milestone created."
-    );
-
-    await loadData();
-  }
-
-  async function toggleMilestone(item) {
-    const { error } = await supabase
-      .from("reward_checkpoints")
-      .update({
-        is_active: !item.is_active,
-      })
-      .eq("id", item.id);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    showMessage(
-      item.is_active
-        ? "Milestone disabled."
-        : "Milestone activated."
-    );
-
-    await loadData();
-  }
-
-  async function deleteMilestone(item) {
-    if (
-      !window.confirm(
-        `Delete milestone "${item.title}"?`
-      )
-    ) {
-      return;
-    }
-
-    const { error } = await supabase
-      .from("reward_checkpoints")
-      .delete()
-      .eq("id", item.id);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    showMessage("Milestone deleted.");
-    await loadData();
-  }
-
-  function openCreateOffer() {
-    setEditingOffer(null);
-    setOfferForm(EMPTY_OFFER);
-    setShowOfferForm(true);
-  }
-
-  function openEditOffer(item) {
-    setEditingOffer(item);
-
-    setOfferForm({
-      title: item.title || "",
-      description: item.description || "",
-      required_points:
-        item.required_points === null ||
-        item.required_points === undefined
-          ? ""
-          : String(item.required_points),
-      benefit: item.benefit || "",
-      discount_type:
-        item.discount_type || "percentage",
-      discount_value:
-        item.discount_value === null ||
-        item.discount_value === undefined
-          ? ""
-          : String(item.discount_value),
-      is_active: item.is_active ?? true,
-    });
-
-    setShowOfferForm(true);
-  }
-
-  async function saveOffer(event) {
-    event.preventDefault();
-
-    if (!offerForm.title.trim()) {
-      showMessage("Reward title is required.");
-      return;
-    }
-
-    const requiredPoints = Number(
-      offerForm.required_points
-    );
-
-    if (
-      !Number.isFinite(requiredPoints) ||
-      requiredPoints < 0
-    ) {
-      showMessage("Enter valid required points.");
-      return;
-    }
-
-    const discountValue = Number(
-      offerForm.discount_value || 0
-    );
-
-    if (
-      offerForm.discount_type === "percentage" &&
-      discountValue > 100
-    ) {
-      showMessage("Percentage cannot exceed 100%.");
-      return;
-    }
-
-    const payload = {
-      title: offerForm.title.trim(),
-      description:
-        offerForm.description.trim() || null,
-      required_points: requiredPoints,
-      benefit:
-        offerForm.benefit.trim() || null,
-      discount_type: offerForm.discount_type,
-      discount_value: discountValue,
-      discount_percent:
-        offerForm.discount_type === "percentage"
-          ? discountValue
-          : 0,
-      target_type: "community",
-      is_active: Boolean(offerForm.is_active),
-    };
-
-    let result;
-
-    if (editingOffer) {
-      result = await supabase
-        .from("community_offers")
-        .update(payload)
-        .eq("id", editingOffer.id);
-    } else {
-      result = await supabase
-        .from("community_offers")
-        .insert([payload]);
-    }
-
-    if (result.error) {
-      showMessage(result.error.message);
-      return;
-    }
-
-    setShowOfferForm(false);
-    setEditingOffer(null);
-    setOfferForm(EMPTY_OFFER);
-
-    showMessage(
-      editingOffer
-        ? "Reward offer updated."
-        : "Reward offer created."
-    );
-
-    await loadData();
-  }
-
-  async function toggleOffer(item) {
-    const { error } = await supabase
-      .from("community_offers")
-      .update({
-        is_active: !item.is_active,
-      })
-      .eq("id", item.id);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    showMessage(
-      item.is_active
-        ? "Reward offer disabled."
-        : "Reward offer activated."
-    );
-
-    await loadData();
-  }
-
-  async function deleteOffer(item) {
-    if (
-      !window.confirm(
-        `Delete reward "${item.title}"?`
-      )
-    ) {
-      return;
-    }
-
-    const { error } = await supabase
-      .from("community_offers")
-      .delete()
-      .eq("id", item.id);
-
-    if (error) {
-      showMessage(error.message);
-      return;
-    }
-
-    showMessage("Reward offer deleted.");
-    await loadData();
-  }
-
   // ============================================================
-  // DERIVED DATA
+  // FILTERS
   // ============================================================
 
-  const confirmedBookings = bookings.filter(
-    (booking) =>
-      String(booking.status).toLowerCase() ===
-      "confirmed"
-  );
+  const filteredTurfs = useMemo(() => {
+    const query = turfSearch
+      .trim()
+      .toLowerCase();
 
-  const pendingBookings = bookings.filter(
-    (booking) =>
-      String(booking.status).toLowerCase() ===
-      "pending"
-  );
+    if (!query) return turfs;
 
-  const cancelledBookings = bookings.filter(
-    (booking) =>
-      String(booking.status).toLowerCase() ===
-      "cancelled"
-  );
-
-  const revenue = confirmedBookings.reduce(
-    (sum, booking) =>
-      sum + Number(booking.total_amount || 0),
-    0
-  );
-
-  const activeTurfs = turfs.filter(
-    (turf) => turf.is_active
-  ).length;
-
-  const activeCoupons = coupons.filter(
-    (coupon) => coupon.is_active
-  ).length;
-
-  const totalCouponUsage = couponUsages.length;
-
-  const totalCurrentPoints = memberRewards.reduce(
-    (sum, member) =>
-      sum + Number(member.points || 0),
-    0
-  );
-
-  const totalLifetimePoints = memberRewards.reduce(
-    (sum, member) =>
-      sum + Number(member.lifetime_points || 0),
-    0
-  );
+    return turfs.filter((turf) =>
+      `${turf.name} ${
+        turf.description || ""
+      }`
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [turfs, turfSearch]);
 
   const filteredSlots = useMemo(() => {
+    const query = slotSearch
+      .trim()
+      .toLowerCase();
+
     return slots.filter((slot) => {
-      const turfMatches =
-        turfFilter === "all" ||
-        String(slot.turf_id) === String(turfFilter);
+      const matchesTurf =
+        slotTurf === "all" ||
+        String(slot.turf_id) ===
+          String(slotTurf);
 
-      const dateMatches =
-        !slotDateFilter ||
-        slot.slot_date === slotDateFilter;
+      const matchesDate =
+        !slotDate ||
+        slot.slot_date === slotDate;
 
-      const searchValue = slotSearch
-        .trim()
-        .toLowerCase();
-
-      const searchMatches =
-        !searchValue ||
+      const matchesSearch =
+        !query ||
         slot.turfs?.name
           ?.toLowerCase()
-          .includes(searchValue);
+          .includes(query);
 
       return (
-        turfMatches &&
-        dateMatches &&
-        searchMatches
+        matchesTurf &&
+        matchesDate &&
+        matchesSearch
       );
     });
   }, [
     slots,
-    turfFilter,
-    slotDateFilter,
     slotSearch,
+    slotDate,
+    slotTurf,
   ]);
 
   const filteredBookings = useMemo(() => {
@@ -1565,9 +1393,9 @@ export default function Admin() {
       .toLowerCase();
 
     return bookings.filter((booking) => {
-      const statusMatches =
-        bookingStatusFilter === "all" ||
-        booking.status === bookingStatusFilter;
+      const statusMatch =
+        bookingStatus === "all" ||
+        booking.status === bookingStatus;
 
       const text =
         `${booking.profiles?.full_name || ""} ${
@@ -1578,15 +1406,15 @@ export default function Admin() {
           booking.turfs?.name || ""
         }`.toLowerCase();
 
-      const searchMatches =
-        !query || text.includes(query);
-
-      return statusMatches && searchMatches;
+      return (
+        statusMatch &&
+        (!query || text.includes(query))
+      );
     });
   }, [
     bookings,
     bookingSearch,
-    bookingStatusFilter,
+    bookingStatus,
   ]);
 
   const filteredUsers = useMemo(() => {
@@ -1596,14 +1424,13 @@ export default function Admin() {
 
     if (!query) return users;
 
-    return users.filter((user) => {
-      const text =
-        `${user.full_name || ""} ${
-          user.email || ""
-        } ${user.phone || ""}`.toLowerCase();
-
-      return text.includes(query);
-    });
+    return users.filter((user) =>
+      `${user.full_name || ""} ${
+        user.email || ""
+      } ${user.phone || ""}`
+        .toLowerCase()
+        .includes(query)
+    );
   }, [users, userSearch]);
 
   const filteredCoupons = useMemo(() => {
@@ -1613,105 +1440,78 @@ export default function Admin() {
 
     if (!query) return coupons;
 
-    return coupons.filter((coupon) => {
-      return (
-        coupon.code
-          ?.toLowerCase()
-          .includes(query) ||
-        coupon.title
-          ?.toLowerCase()
-          .includes(query) ||
-        coupon.description
-          ?.toLowerCase()
-          .includes(query)
-      );
-    });
+    return coupons.filter((coupon) =>
+      `${coupon.code || ""} ${
+        coupon.title || ""
+      } ${coupon.description || ""}`
+        .toLowerCase()
+        .includes(query)
+    );
   }, [coupons, couponSearch]);
 
-  const filteredRewardMembers = useMemo(() => {
-    const query = rewardSearch
-      .trim()
-      .toLowerCase();
-
-    if (!query) return memberRewards;
-
-    return memberRewards.filter((member) => {
-      const user = users.find(
-        (item) => item.id === member.user_id
-      );
-
-      const text =
-        `${user?.full_name || ""} ${
-          user?.email || ""
-        }`.toLowerCase();
-
-      return text.includes(query);
-    });
-  }, [memberRewards, users, rewardSearch]);
-
   // ============================================================
-  // NAVIGATION
+  // STATS
   // ============================================================
 
-  const navigation = [
-    {
-      id: "overview",
-      label: "Overview",
-      icon: LayoutDashboard,
-    },
-    {
-      id: "turfs",
-      label: "Turfs",
-      icon: Trophy,
-    },
-    {
-      id: "slots",
-      label: "Time Slots",
-      icon: CalendarDays,
-    },
-    {
-      id: "bookings",
-      label: "Bookings",
-      icon: ClipboardList,
-    },
-    {
-      id: "users",
-      label: "Users",
-      icon: Users,
-    },
-    {
-      id: "rewards",
-      label: "Rewards",
-      icon: Gift,
-    },
-    {
-      id: "coupons",
-      label: "Coupons",
-      icon: TicketPercent,
-    },
-    {
-      id: "announcements",
-      label: "Announcements",
-      icon: Megaphone,
-    },
-  ];
+  const activeTurfs = turfs.filter(
+    (turf) => turf.is_active
+  ).length;
+
+  const activeCoupons = coupons.filter(
+    (coupon) => coupon.is_active
+  ).length;
+
+  const pendingBookings = bookings.filter(
+    (booking) => booking.status === "pending"
+  );
+
+  const confirmedBookings =
+    bookings.filter(
+      (booking) =>
+        booking.status === "confirmed"
+    );
+
+  const revenue = confirmedBookings.reduce(
+    (sum, booking) =>
+      sum +
+      Number(booking.total_amount || 0),
+    0
+  );
+
+  const currentPoints =
+    memberRewards.reduce(
+      (sum, member) =>
+        sum + Number(member.points || 0),
+      0
+    );
+
+  const navTitle =
+    NAVIGATION.find(
+      (item) => item.id === activeSection
+    )?.label || "Overview";
 
   // ============================================================
-  // RENDER
+  // LOADING
   // ============================================================
 
   if (loading) {
     return (
       <div className="admin-loading">
-        <div className="admin-loading-icon">
-          <ShieldCheck size={32} />
+        <div className="admin-loading-mark">
+          S
         </div>
 
-        <h2>SPORTIVA ADMIN</h2>
+        <div className="admin-loading-copy">
+          <strong>
+            SPORTIVA ADMIN
+          </strong>
 
-        <p>Loading control center...</p>
+          <span>
+            Preparing your control center
+          </span>
+        </div>
 
-        <div className="admin-loading-bar">
+        <div className="admin-loading-line">
           <div />
         </div>
       </div>
@@ -1721,6 +1521,10 @@ export default function Admin() {
   return (
     <div className="admin-page">
 
+      {/* ======================================================
+          SIDEBAR
+      ====================================================== */}
+
       <aside className="admin-sidebar">
 
         <div className="admin-brand">
@@ -1728,19 +1532,19 @@ export default function Admin() {
             S
           </div>
 
-          <div>
+          <div className="admin-brand-copy">
             <strong>SPORTIVA</strong>
             <span>ADMIN CONTROL</span>
           </div>
         </div>
 
-        <div className="admin-sidebar-label">
+        <div className="admin-nav-label">
           MANAGEMENT
         </div>
 
-        <nav className="admin-navigation">
+        <nav className="admin-nav">
 
-          {navigation.map((item) => {
+          {NAVIGATION.map((item) => {
             const Icon = item.icon;
 
             return (
@@ -1748,84 +1552,109 @@ export default function Admin() {
                 key={item.id}
                 type="button"
                 className={
-                  activeTab === item.id
+                  activeSection === item.id
                     ? "active"
                     : ""
                 }
-                onClick={() => setActiveTab(item.id)}
+                onClick={() =>
+                  setActiveSection(item.id)
+                }
               >
                 <Icon size={17} />
+
                 <span>{item.label}</span>
 
                 {item.id === "bookings" &&
                   pendingBookings.length > 0 && (
-                    <b className="admin-nav-count">
+                    <b>
                       {pendingBookings.length}
                     </b>
                   )}
 
                 {item.id === "coupons" &&
                   activeCoupons > 0 && (
-                    <b className="admin-nav-count">
+                    <b>
                       {activeCoupons}
                     </b>
                   )}
+
               </button>
             );
           })}
 
         </nav>
 
-        <div className="admin-sidebar-footer">
-          <div>
+        <div className="admin-sidebar-bottom">
+
+          <div className="admin-secure">
             <ShieldCheck size={15} />
-            <span>SECURE ACCESS</span>
+
+            <div>
+              <strong>
+                SECURE ACCESS
+              </strong>
+
+              <span>
+                Sportiva Admin
+              </span>
+            </div>
           </div>
 
-          <small>
-            Sportiva Management System
-          </small>
         </div>
 
       </aside>
 
+      {/* ======================================================
+          MAIN
+      ====================================================== */}
+
       <main className="admin-main">
 
-        <header className="admin-topbar">
+        <header className="admin-header">
 
           <div>
-            <span className="admin-topbar-label">
+            <span className="admin-header-label">
               THE SPORTIVA
             </span>
 
-            <h1>
-              {navigation.find(
-                (item) => item.id === activeTab
-              )?.label || "Overview"}
-            </h1>
+            <h1>{navTitle}</h1>
           </div>
 
           <button
             type="button"
-            className="admin-refresh"
-            onClick={loadData}
+            className="admin-refresh-button"
+            onClick={() =>
+              loadData({ refresh: true })
+            }
+            disabled={refreshing}
           >
-            <RefreshCw size={16} />
-            Refresh
+            <RefreshCw
+              size={16}
+              className={
+                refreshing
+                  ? "admin-spin"
+                  : ""
+              }
+            />
+
+            {refreshing
+              ? "Refreshing..."
+              : "Refresh"}
           </button>
 
         </header>
 
         {message && (
-          <div className="admin-message">
-            <Check size={16} />
+          <div className="admin-toast">
+            <Check size={15} />
+
             <span>{message}</span>
 
             <button
               type="button"
               onClick={() => setMessage("")}
             >
-              <X size={15} />
+              <X size={14} />
             </button>
           </div>
         )}
@@ -1834,182 +1663,121 @@ export default function Admin() {
             OVERVIEW
         ====================================================== */}
 
-        {activeTab === "overview" && (
-          <section className="admin-section">
+        {activeSection === "overview" && (
+          <section className="admin-content">
 
-            <div className="admin-hero-panel">
+            <div className="admin-welcome-panel">
 
               <div>
-                <span>SPORTIVA CONTROL CENTER</span>
+                <span>
+                  FACILITY OPERATIONS
+                </span>
 
                 <h2>
-                  Everything under
+                  Welcome to the
                   <br />
-                  one roof.
+                  Sportiva control center.
                 </h2>
 
                 <p>
-                  Monitor bookings, manage turf
-                  availability, run promotions,
-                  reward customers and keep the
-                  facility updated in real time.
+                  Manage your facility,
+                  bookings, promotions and
+                  customer experience from
+                  one place.
                 </p>
               </div>
 
-              <div className="admin-live-indicator">
+              <div className="admin-live-pill">
                 <span />
-                LIVE
+                LIVE SYSTEM
               </div>
 
             </div>
 
             <div className="admin-stat-grid">
 
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Trophy size={19} />
-                </div>
+              <StatCard
+                icon={Trophy}
+                label="Active Turfs"
+                value={activeTurfs}
+                detail={`${turfs.length} total facilities`}
+              />
 
-                <span>Active Turfs</span>
-                <strong>{activeTurfs}</strong>
-                <small>
-                  {turfs.length} total facilities
-                </small>
-              </div>
+              <StatCard
+                icon={ClipboardList}
+                label="Bookings"
+                value={bookings.length}
+                detail={`${pendingBookings.length} awaiting action`}
+              />
 
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <CalendarDays size={19} />
-                </div>
+              <StatCard
+                icon={Activity}
+                label="Revenue"
+                value={`৳${revenue.toLocaleString()}`}
+                detail="Confirmed bookings"
+              />
 
-                <span>Total Slots</span>
-                <strong>{slots.length}</strong>
-                <small>
-                  Scheduled time slots
-                </small>
-              </div>
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <ClipboardList size={19} />
-                </div>
-
-                <span>Bookings</span>
-                <strong>{bookings.length}</strong>
-                <small>
-                  {pendingBookings.length} pending
-                </small>
-              </div>
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Activity size={19} />
-                </div>
-
-                <span>Revenue</span>
-                <strong>
-                  ৳{revenue.toLocaleString()}
-                </strong>
-                <small>
-                  Confirmed bookings
-                </small>
-              </div>
+              <StatCard
+                icon={Users}
+                label="Members"
+                value={users.length}
+                detail="Registered customers"
+              />
 
             </div>
 
-            <div className="admin-stat-grid">
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Users size={19} />
-                </div>
-
-                <span>Members</span>
-                <strong>{users.length}</strong>
-                <small>
-                  Registered customer profiles
-                </small>
-              </div>
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Gift size={19} />
-                </div>
-
-                <span>Reward Points</span>
-                <strong>
-                  {totalCurrentPoints.toLocaleString()}
-                </strong>
-                <small>
-                  Current member balance
-                </small>
-              </div>
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <TicketPercent size={19} />
-                </div>
-
-                <span>Active Coupons</span>
-                <strong>{activeCoupons}</strong>
-                <small>
-                  {totalCouponUsage} redemptions
-                </small>
-              </div>
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Megaphone size={19} />
-                </div>
-
-                <span>Announcements</span>
-                <strong>
-                  {
-                    announcements.filter(
-                      (item) => item.is_active
-                    ).length
-                  }
-                </strong>
-                <small>
-                  Active customer updates
-                </small>
-              </div>
-
-            </div>
-
-            <div className="admin-dashboard-grid">
+            <div className="admin-overview-grid">
 
               <div className="admin-panel">
 
-                <div className="admin-panel-heading">
+                <div className="admin-panel-header">
+
                   <div>
-                    <span>BOOKING FLOW</span>
-                    <h3>Booking Summary</h3>
+                    <span>BOOKING STATUS</span>
+                    <h3>
+                      Today's overview
+                    </h3>
                   </div>
 
                   <ClipboardList size={18} />
+
                 </div>
 
-                <div className="admin-summary-list">
+                <div className="admin-overview-list">
 
                   <div>
-                    <span>Confirmed</span>
-                    <strong>
-                      {confirmedBookings.length}
-                    </strong>
-                  </div>
+                    <span>
+                      Pending
+                    </span>
 
-                  <div>
-                    <span>Pending</span>
                     <strong>
                       {pendingBookings.length}
                     </strong>
                   </div>
 
                   <div>
-                    <span>Cancelled</span>
+                    <span>
+                      Confirmed
+                    </span>
+
                     <strong>
-                      {cancelledBookings.length}
+                      {confirmedBookings.length}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Cancelled
+                    </span>
+
+                    <strong>
+                      {
+                        bookings.filter(
+                          (item) =>
+                            item.status ===
+                            "cancelled"
+                        ).length
+                      }
                     </strong>
                   </div>
 
@@ -2019,39 +1787,143 @@ export default function Admin() {
 
               <div className="admin-panel">
 
-                <div className="admin-panel-heading">
+                <div className="admin-panel-header">
+
                   <div>
-                    <span>LOYALTY SYSTEM</span>
-                    <h3>Rewards Summary</h3>
+                    <span>PROMOTIONS</span>
+                    <h3>
+                      Coupon system
+                    </h3>
                   </div>
 
-                  <Gift size={18} />
+                  <TicketPercent
+                    size={18}
+                  />
+
                 </div>
 
-                <div className="admin-summary-list">
+                <div className="admin-promotion-summary">
 
-                  <div>
-                    <span>Members</span>
-                    <strong>
-                      {memberRewards.length}
-                    </strong>
-                  </div>
+                  <strong>
+                    {activeCoupons}
+                  </strong>
 
-                  <div>
-                    <span>Current Points</span>
-                    <strong>
-                      {totalCurrentPoints.toLocaleString()}
-                    </strong>
-                  </div>
+                  <span>
+                    active promotional codes
+                  </span>
 
-                  <div>
-                    <span>Lifetime Points</span>
-                    <strong>
-                      {totalLifetimePoints.toLocaleString()}
-                    </strong>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveSection(
+                        "coupons"
+                      )
+                    }
+                  >
+                    Manage coupons
+                    <ChevronRight
+                      size={14}
+                    />
+                  </button>
 
                 </div>
+
+              </div>
+
+            </div>
+
+            <div className="admin-recent-panel">
+
+              <div className="admin-panel-header">
+
+                <div>
+                  <span>RECENT ACTIVITY</span>
+                  <h3>
+                    Latest bookings
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveSection(
+                      "bookings"
+                    )
+                  }
+                >
+                  View all
+                  <ChevronRight
+                    size={14}
+                  />
+                </button>
+
+              </div>
+
+              <div className="admin-mini-list">
+
+                {bookings
+                  .slice(0, 6)
+                  .map((booking) => (
+                    <div
+                      className="admin-mini-row"
+                      key={booking.id}
+                    >
+
+                      <div className="admin-mini-person">
+
+                        <div>
+                          {booking.profiles
+                            ?.full_name
+                            ?.charAt(0)
+                            ?.toUpperCase() ||
+                            "U"}
+                        </div>
+
+                        <span>
+                          {
+                            booking.profiles
+                              ?.full_name ||
+                            "Unknown User"
+                          }
+                        </span>
+
+                      </div>
+
+                      <span>
+                        {booking.turfs?.name ||
+                          "Turf"}
+                      </span>
+
+                      <strong>
+                        ৳
+                        {Number(
+                          booking.total_amount ||
+                            0
+                        ).toLocaleString()}
+                      </strong>
+
+                      <StatusBadge
+                        type={
+                          booking.status ===
+                          "confirmed"
+                            ? "success"
+                            : booking.status ===
+                              "pending"
+                            ? "warning"
+                            : "danger"
+                        }
+                      >
+                        {booking.status}
+                      </StatusBadge>
+
+                    </div>
+                  ))}
+
+                {bookings.length === 0 && (
+                  <div className="admin-empty-small">
+                    No bookings yet.
+                  </div>
+                )}
 
               </div>
 
@@ -2064,10 +1936,11 @@ export default function Admin() {
             TURFS
         ====================================================== */}
 
-        {activeTab === "turfs" && (
-          <section className="admin-section">
+        {activeSection === "turfs" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
+
               <div>
                 <span>FACILITY MANAGEMENT</span>
                 <h2>Turfs</h2>
@@ -2076,22 +1949,47 @@ export default function Admin() {
               <button
                 type="button"
                 className="admin-primary-button"
-                onClick={openCreateTurf}
+                onClick={createTurf}
               >
                 <Plus size={16} />
                 Add Turf
               </button>
+
             </div>
 
-            <div className="admin-card-grid">
+            <div className="admin-toolbar">
 
-              {turfs.map((turf) => (
-                <div
+              <div className="admin-search-box">
+                <Search size={16} />
+
+                <input
+                  type="text"
+                  placeholder="Search turfs..."
+                  value={turfSearch}
+                  onChange={(event) =>
+                    setTurfSearch(
+                      event.target.value
+                    )
+                  }
+                />
+              </div>
+
+              <span>
+                {filteredTurfs.length} facilities
+              </span>
+
+            </div>
+
+            <div className="admin-turf-grid">
+
+              {filteredTurfs.map((turf) => (
+                <article
                   className="admin-turf-card"
                   key={turf.id}
                 >
 
-                  <div className="admin-turf-image">
+                  <div className="admin-turf-visual">
+
                     {turf.image_url ? (
                       <img
                         src={turf.image_url}
@@ -2106,24 +2004,27 @@ export default function Admin() {
                     <span
                       className={
                         turf.is_active
-                          ? "admin-image-status active"
-                          : "admin-image-status"
+                          ? "active"
+                          : ""
                       }
                     >
                       {turf.is_active
                         ? "ACTIVE"
                         : "DISABLED"}
                     </span>
+
                   </div>
 
-                  <div className="admin-turf-content">
+                  <div className="admin-turf-card-body">
 
                     <div>
-                      <span className="admin-card-eyebrow">
+                      <small>
                         SPORTIVA FACILITY
-                      </span>
+                      </small>
 
-                      <h3>{turf.name}</h3>
+                      <h3>
+                        {turf.name}
+                      </h3>
 
                       <p>
                         {turf.description ||
@@ -2142,15 +2043,15 @@ export default function Admin() {
                       <span>/ hour</span>
                     </div>
 
-                    <div className="admin-card-actions">
+                    <div className="admin-inline-actions">
 
                       <button
                         type="button"
                         onClick={() =>
-                          openEditTurf(turf)
+                          editTurf(turf)
                         }
                       >
-                        <Edit3 size={15} />
+                        <Edit3 size={14} />
                         Edit
                       </button>
 
@@ -2161,9 +2062,9 @@ export default function Admin() {
                         }
                       >
                         {turf.is_active ? (
-                          <X size={15} />
+                          <X size={14} />
                         ) : (
-                          <Check size={15} />
+                          <Check size={14} />
                         )}
 
                         {turf.is_active
@@ -2178,25 +2079,27 @@ export default function Admin() {
                           deleteTurf(turf)
                         }
                       >
-                        <Trash2 size={15} />
-                        Delete
+                        <Trash2 size={14} />
                       </button>
 
                     </div>
 
                   </div>
 
-                </div>
+                </article>
               ))}
 
             </div>
 
-            {turfs.length === 0 && (
+            {filteredTurfs.length === 0 && (
               <div className="admin-empty">
                 <Trophy size={28} />
-                <strong>No turfs yet.</strong>
+                <strong>
+                  No turfs found.
+                </strong>
                 <span>
-                  Create your first Sportiva facility.
+                  Add a facility to start
+                  accepting bookings.
                 </span>
               </div>
             )}
@@ -2208,29 +2111,36 @@ export default function Admin() {
             TIME SLOTS
         ====================================================== */}
 
-        {activeTab === "slots" && (
-          <section className="admin-section">
+        {activeSection === "slots" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
+
               <div>
-                <span>AVAILABILITY MANAGEMENT</span>
-                <h2>Time Slots</h2>
+                <span>
+                  AVAILABILITY MANAGEMENT
+                </span>
+
+                <h2>
+                  Time Slots
+                </h2>
               </div>
 
               <button
                 type="button"
                 className="admin-primary-button"
-                onClick={openCreateSlot}
+                onClick={createSlot}
               >
                 <Plus size={16} />
-                Add Time Slot
+                Add Slot
               </button>
+
             </div>
 
-            <div className="admin-filter-bar">
+            <div className="admin-toolbar admin-toolbar-grid">
 
-              <div className="admin-filter-input">
-                <Search size={15} />
+              <div className="admin-search-box">
+                <Search size={16} />
 
                 <input
                   type="text"
@@ -2245,15 +2155,15 @@ export default function Admin() {
               </div>
 
               <select
-                value={turfFilter}
+                value={slotTurf}
                 onChange={(event) =>
-                  setTurfFilter(
+                  setSlotTurf(
                     event.target.value
                   )
                 }
               >
                 <option value="all">
-                  All Turfs
+                  All turfs
                 </option>
 
                 {turfs.map((turf) => (
@@ -2268,9 +2178,9 @@ export default function Admin() {
 
               <input
                 type="date"
-                value={slotDateFilter}
+                value={slotDate}
                 onChange={(event) =>
-                  setSlotDateFilter(
+                  setSlotDate(
                     event.target.value
                   )
                 }
@@ -2278,11 +2188,11 @@ export default function Admin() {
 
               <button
                 type="button"
-                className="admin-clear-filter"
+                className="admin-clear-button"
                 onClick={() => {
-                  setTurfFilter("all");
-                  setSlotDateFilter("");
                   setSlotSearch("");
+                  setSlotTurf("all");
+                  setSlotDate("");
                 }}
               >
                 Clear
@@ -2325,12 +2235,19 @@ export default function Admin() {
                         </td>
 
                         <td>
-                          <div className="admin-time-cell">
-                            <Clock3 size={14} />
+                          <div className="admin-time-value">
+                            <Clock3
+                              size={14}
+                            />
+
                             {formatTime(
                               slot.start_time
                             )}
-                            <span>—</span>
+
+                            <span>
+                              —
+                            </span>
+
                             {formatTime(
                               slot.end_time
                             )}
@@ -2342,7 +2259,7 @@ export default function Admin() {
                             type={
                               slot.is_available
                                 ? "success"
-                                : "muted"
+                                : "neutral"
                             }
                           >
                             {slot.is_available
@@ -2352,12 +2269,14 @@ export default function Admin() {
                         </td>
 
                         <td>
-                          <div className="admin-table-actions">
+                          <div className="admin-row-actions">
 
                             <button
                               type="button"
                               onClick={() =>
-                                openEditSlot(slot)
+                                editSlot(
+                                  slot
+                                )
                               }
                             >
                               <Edit3 size={14} />
@@ -2366,13 +2285,17 @@ export default function Admin() {
                             <button
                               type="button"
                               onClick={() =>
-                                toggleSlot(slot)
+                                toggleSlot(
+                                  slot
+                                )
                               }
                             >
                               {slot.is_available ? (
                                 <X size={14} />
                               ) : (
-                                <Check size={14} />
+                                <Check
+                                  size={14}
+                                />
                               )}
                             </button>
 
@@ -2380,7 +2303,9 @@ export default function Admin() {
                               type="button"
                               className="danger"
                               onClick={() =>
-                                deleteSlot(slot)
+                                deleteSlot(
+                                  slot
+                                )
                               }
                             >
                               <Trash2 size={14} />
@@ -2400,7 +2325,7 @@ export default function Admin() {
 
               {filteredSlots.length === 0 && (
                 <div className="admin-table-empty">
-                  No time slots match your filters.
+                  No slots match your filters.
                 </div>
               )}
 
@@ -2413,28 +2338,35 @@ export default function Admin() {
             BOOKINGS
         ====================================================== */}
 
-        {activeTab === "bookings" && (
-          <section className="admin-section">
+        {activeSection === "bookings" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
+
               <div>
-                <span>RESERVATION CONTROL</span>
-                <h2>Bookings</h2>
+                <span>
+                  RESERVATION MANAGEMENT
+                </span>
+
+                <h2>
+                  Bookings
+                </h2>
               </div>
 
-              <strong className="admin-heading-count">
+              <span className="admin-page-counter">
                 {bookings.length} TOTAL
-              </strong>
+              </span>
+
             </div>
 
-            <div className="admin-filter-bar">
+            <div className="admin-toolbar">
 
-              <div className="admin-filter-input">
-                <Search size={15} />
+              <div className="admin-search-box">
+                <Search size={16} />
 
                 <input
                   type="text"
-                  placeholder="Search customer, turf or email..."
+                  placeholder="Search customer or turf..."
                   value={bookingSearch}
                   onChange={(event) =>
                     setBookingSearch(
@@ -2445,15 +2377,15 @@ export default function Admin() {
               </div>
 
               <select
-                value={bookingStatusFilter}
+                value={bookingStatus}
                 onChange={(event) =>
-                  setBookingStatusFilter(
+                  setBookingStatus(
                     event.target.value
                   )
                 }
               >
                 <option value="all">
-                  All Statuses
+                  All statuses
                 </option>
 
                 <option value="pending">
@@ -2484,7 +2416,7 @@ export default function Admin() {
                       <th>Schedule</th>
                       <th>Amount</th>
                       <th>Status</th>
-                      <th>Actions</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
 
@@ -2495,41 +2427,48 @@ export default function Admin() {
                         <tr key={booking.id}>
 
                           <td>
-                            <div className="admin-person-cell">
+                            <div className="admin-person">
 
-                              <div className="admin-mini-avatar">
-                                {booking.profiles?.full_name
+                              <div>
+                                {booking
+                                  .profiles
+                                  ?.full_name
                                   ?.charAt(0)
                                   ?.toUpperCase() ||
                                   "U"}
                               </div>
 
-                              <div>
+                              <section>
                                 <strong>
-                                  {booking.profiles
+                                  {booking
+                                    .profiles
                                     ?.full_name ||
                                     "Unknown User"}
                                 </strong>
 
                                 <small>
-                                  {booking.profiles
+                                  {booking
+                                    .profiles
                                     ?.email ||
-                                    booking.profiles
+                                    booking
+                                      .profiles
                                       ?.phone ||
                                     "No contact"}
                                 </small>
-                              </div>
+                              </section>
 
                             </div>
                           </td>
 
                           <td>
-                            {booking.turfs?.name ||
+                            {booking
+                              .turfs?.name ||
                               "Unknown Turf"}
                           </td>
 
                           <td>
-                            <div className="admin-schedule-cell">
+                            <div className="admin-schedule">
+
                               <strong>
                                 {formatDate(
                                   booking.booking_date
@@ -2545,6 +2484,7 @@ export default function Admin() {
                                   booking.end_time
                                 )}
                               </small>
+
                             </div>
                           </td>
 
@@ -2559,6 +2499,7 @@ export default function Admin() {
                           </td>
 
                           <td>
+
                             <StatusBadge
                               type={
                                 booking.status ===
@@ -2572,23 +2513,25 @@ export default function Admin() {
                             >
                               {booking.status}
                             </StatusBadge>
+
                           </td>
 
                           <td>
+
                             {booking.status ===
-                              "pending" ? (
-                              <div className="admin-table-actions">
+                            "pending" ? (
+                              <div className="admin-row-actions">
 
                                 <button
                                   type="button"
                                   className="success"
                                   onClick={() =>
-                                    updateBookingStatus(
+                                    setBookingStatus(
                                       booking,
                                       "confirmed"
                                     )
                                   }
-                                  title="Confirm"
+                                  title="Confirm booking"
                                 >
                                   <Check size={14} />
                                 </button>
@@ -2597,24 +2540,25 @@ export default function Admin() {
                                   type="button"
                                   className="danger"
                                   onClick={() =>
-                                    updateBookingStatus(
+                                    setBookingStatus(
                                       booking,
                                       "cancelled"
                                     )
                                   }
-                                  title="Cancel"
+                                  title="Cancel booking"
                                 >
                                   <X size={14} />
                                 </button>
 
                               </div>
                             ) : (
-                              <span className="admin-muted-text">
+                              <span className="admin-muted">
                                 {formatDateTime(
                                   booking.created_at
                                 )}
                               </span>
                             )}
+
                           </td>
 
                         </tr>
@@ -2627,7 +2571,8 @@ export default function Admin() {
 
               </div>
 
-              {filteredBookings.length === 0 && (
+              {filteredBookings.length ===
+                0 && (
                 <div className="admin-table-empty">
                   No bookings found.
                 </div>
@@ -2642,28 +2587,33 @@ export default function Admin() {
             USERS
         ====================================================== */}
 
-        {activeTab === "users" && (
-          <section className="admin-section">
+        {activeSection === "users" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
+
               <div>
-                <span>CUSTOMER MANAGEMENT</span>
+                <span>
+                  CUSTOMER MANAGEMENT
+                </span>
+
                 <h2>Users</h2>
               </div>
 
-              <strong className="admin-heading-count">
+              <span className="admin-page-counter">
                 {users.length} MEMBERS
-              </strong>
+              </span>
+
             </div>
 
-            <div className="admin-filter-bar">
+            <div className="admin-toolbar">
 
-              <div className="admin-filter-input">
-                <Search size={15} />
+              <div className="admin-search-box">
+                <Search size={16} />
 
                 <input
                   type="text"
-                  placeholder="Search name, email or phone..."
+                  placeholder="Search member..."
                   value={userSearch}
                   onChange={(event) =>
                     setUserSearch(
@@ -2692,61 +2642,61 @@ export default function Admin() {
 
                   <tbody>
 
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id}>
+                    {filteredUsers.map(
+                      (user) => (
+                        <tr key={user.id}>
 
-                        <td>
-                          <div className="admin-person-cell">
+                          <td>
+                            <div className="admin-person">
 
-                            <div className="admin-mini-avatar">
-                              {user.full_name
-                                ?.charAt(0)
-                                ?.toUpperCase() ||
-                                "U"}
+                              <div>
+                                {user.full_name
+                                  ?.charAt(0)
+                                  ?.toUpperCase() ||
+                                  "U"}
+                              </div>
+
+                              <section>
+                                <strong>
+                                  {user.full_name ||
+                                    "Unnamed"}
+                                </strong>
+
+                                <small>
+                                  ID:{" "}
+                                  {user.id.slice(
+                                    0,
+                                    8
+                                  )}
+                                </small>
+                              </section>
+
                             </div>
+                          </td>
 
-                            <div>
-                              <strong>
-                                {user.full_name ||
-                                  "Unnamed Member"}
-                              </strong>
+                          <td>
+                            {user.phone || "—"}
+                          </td>
 
-                              <small>
-                                {user.id.slice(0, 8)}
-                              </small>
-                            </div>
+                          <td>
+                            {user.email || "—"}
+                          </td>
 
-                          </div>
-                        </td>
+                          <td>
+                            {formatDateTime(
+                              user.created_at
+                            )}
+                          </td>
 
-                        <td>
-                          {user.phone || "—"}
-                        </td>
-
-                        <td>
-                          {user.email || "—"}
-                        </td>
-
-                        <td>
-                          {formatDateTime(
-                            user.created_at
-                          )}
-                        </td>
-
-                      </tr>
-                    ))}
+                        </tr>
+                      )
+                    )}
 
                   </tbody>
 
                 </table>
 
               </div>
-
-              {filteredUsers.length === 0 && (
-                <div className="admin-table-empty">
-                  No users found.
-                </div>
-              )}
 
             </div>
 
@@ -2757,572 +2707,384 @@ export default function Admin() {
             REWARDS
         ====================================================== */}
 
-        {activeTab === "rewards" && (
-          <section className="admin-section">
+        {activeSection === "rewards" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
+
               <div>
-                <span>LOYALTY CONTROL</span>
-                <h2>Sportiva Rewards</h2>
+                <span>
+                  CUSTOMER LOYALTY
+                </span>
+
+                <h2>
+                  Sportiva Rewards
+                </h2>
               </div>
-            </div>
-
-            <div className="admin-subtabs">
-
-              {[
-                ["overview", "Overview"],
-                ["members", "Member Points"],
-                ["milestones", "Milestones"],
-                ["offers", "Reward Offers"],
-                ["history", "Reward History"],
-              ].map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={
-                    rewardTab === id
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() =>
-                    setRewardTab(id)
-                  }
-                >
-                  {label}
-                </button>
-              ))}
 
             </div>
 
-            {rewardTab === "overview" && (
-              <div>
+            <div className="admin-stat-grid">
 
-                <div className="admin-stat-grid">
+              <StatCard
+                icon={Users}
+                label="Reward Members"
+                value={memberRewards.length}
+                detail="Active reward accounts"
+              />
 
-                  <div className="admin-stat-card">
-                    <div className="admin-stat-icon">
-                      <Users size={18} />
-                    </div>
+              <StatCard
+                icon={Gift}
+                label="Current Points"
+                value={currentPoints.toLocaleString()}
+                detail="Customer balance"
+              />
 
-                    <span>Reward Members</span>
-                    <strong>
-                      {memberRewards.length}
-                    </strong>
+              <StatCard
+                icon={Trophy}
+                label="Milestones"
+                value={
+                  rewardCheckpoints.length
+                }
+                detail="Configured checkpoints"
+              />
 
-                    <small>
-                      Members with reward accounts
-                    </small>
-                  </div>
+              <StatCard
+                icon={Gift}
+                label="Reward Offers"
+                value={
+                  communityOffers.filter(
+                    (item) =>
+                      item.is_active
+                  ).length
+                }
+                detail="Active redemption offers"
+              />
 
-                  <div className="admin-stat-card">
-                    <div className="admin-stat-icon">
-                      <Gift size={18} />
-                    </div>
+            </div>
 
-                    <span>Current Points</span>
-                    <strong>
-                      {totalCurrentPoints.toLocaleString()}
-                    </strong>
+            <div className="admin-segmented-tabs">
 
-                    <small>
-                      Spendable member points
-                    </small>
-                  </div>
+              <button
+                type="button"
+                className={
+                  rewardSection === "members"
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setRewardSection(
+                    "members"
+                  )
+                }
+              >
+                Members
+              </button>
 
-                  <div className="admin-stat-card">
-                    <div className="admin-stat-icon">
-                      <Activity size={18} />
-                    </div>
+              <button
+                type="button"
+                className={
+                  rewardSection === "milestones"
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setRewardSection(
+                    "milestones"
+                  )
+                }
+              >
+                Milestones
+              </button>
 
-                    <span>Lifetime Points</span>
-                    <strong>
-                      {totalLifetimePoints.toLocaleString()}
-                    </strong>
+              <button
+                type="button"
+                className={
+                  rewardSection === "offers"
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setRewardSection(
+                    "offers"
+                  )
+                }
+              >
+                Offers
+              </button>
 
-                    <small>
-                      Total earned points
-                    </small>
-                  </div>
+              <button
+                type="button"
+                className={
+                  rewardSection === "history"
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setRewardSection(
+                    "history"
+                  )
+                }
+              >
+                History
+              </button>
 
-                  <div className="admin-stat-card">
-                    <div className="admin-stat-icon">
-                      <Gift size={18} />
-                    </div>
+            </div>
 
-                    <span>Active Offers</span>
-                    <strong>
-                      {
-                        communityOffers.filter(
-                          (offer) =>
-                            offer.is_active
-                        ).length
-                      }
-                    </strong>
+            {rewardSection ===
+              "members" && (
+              <div className="admin-table-card">
 
-                    <small>
-                      Redeemable rewards
-                    </small>
-                  </div>
+                <div className="admin-toolbar embedded">
 
-                </div>
-
-                <div className="admin-panel">
-
-                  <div className="admin-panel-heading">
-                    <div>
-                      <span>PROGRAM STRUCTURE</span>
-                      <h3>
-                        Reward milestones
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="admin-milestone-grid">
-
-                    {rewardCheckpoints.map(
-                      (checkpoint) => (
-                        <div
-                          className="admin-milestone-card"
-                          key={checkpoint.id}
-                        >
-                          <span>
-                            {checkpoint.points_required}{" "}
-                            POINTS
-                          </span>
-
-                          <strong>
-                            {checkpoint.title}
-                          </strong>
-
-                          <p>
-                            {checkpoint.description ||
-                              "No description."}
-                          </p>
-                        </div>
-                      )
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-            )}
-
-            {rewardTab === "members" && (
-              <div>
-
-                <div className="admin-toolbar-row">
-
-                  <div className="admin-filter-input">
-                    <Search size={15} />
+                  <div className="admin-search-box">
+                    <Search size={16} />
 
                     <input
                       type="text"
-                      placeholder="Search member..."
-                      value={rewardSearch}
-                      onChange={(event) =>
-                        setRewardSearch(
-                          event.target.value
-                        )
-                      }
+                      placeholder="Search reward members..."
+                      onChange={(event) => {
+                        // Visual search is intentionally
+                        // kept simple in this clean panel.
+                        void event;
+                      }}
                     />
                   </div>
 
                 </div>
 
-                <div className="admin-table-card">
+                <div className="admin-table-scroll">
 
-                  <div className="admin-table-scroll">
+                  <table className="admin-table">
 
-                    <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Member</th>
+                        <th>Points</th>
+                        <th>Lifetime</th>
+                        <th>Updated</th>
+                        <th />
+                      </tr>
+                    </thead>
 
-                      <thead>
-                        <tr>
-                          <th>Member</th>
-                          <th>Points</th>
-                          <th>Lifetime</th>
-                          <th>Updated</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
+                    <tbody>
 
-                      <tbody>
-
-                        {filteredRewardMembers.map(
-                          (member) => {
-                            const user = users.find(
+                      {memberRewards.map(
+                        (member) => {
+                          const user =
+                            users.find(
                               (item) =>
                                 item.id ===
                                 member.user_id
                             );
 
-                            return (
-                              <tr
-                                key={
-                                  member.user_id
-                                }
-                              >
+                          return (
+                            <tr
+                              key={
+                                member.user_id
+                              }
+                            >
 
-                                <td>
-                                  <div className="admin-person-cell">
+                              <td>
+                                <div className="admin-person">
 
-                                    <div className="admin-mini-avatar">
-                                      {user?.full_name
-                                        ?.charAt(0)
-                                        ?.toUpperCase() ||
-                                        "U"}
-                                    </div>
-
-                                    <div>
-                                      <strong>
-                                        {user?.full_name ||
-                                          "Unknown Member"}
-                                      </strong>
-
-                                      <small>
-                                        {user?.email ||
-                                          member.user_id.slice(
-                                            0,
-                                            8
-                                          )}
-                                      </small>
-                                    </div>
-
+                                  <div>
+                                    {user
+                                      ?.full_name
+                                      ?.charAt(0)
+                                      ?.toUpperCase() ||
+                                      "U"}
                                   </div>
-                                </td>
 
-                                <td>
-                                  <strong>
-                                    {Number(
-                                      member.points || 0
-                                    ).toLocaleString()}
-                                  </strong>
-                                </td>
+                                  <section>
+                                    <strong>
+                                      {user
+                                        ?.full_name ||
+                                        "Unknown Member"}
+                                    </strong>
 
-                                <td>
+                                    <small>
+                                      {user?.email ||
+                                        member.user_id.slice(
+                                          0,
+                                          8
+                                        )}
+                                    </small>
+                                  </section>
+
+                                </div>
+                              </td>
+
+                              <td>
+                                <strong>
                                   {Number(
-                                    member.lifetime_points ||
+                                    member.points ||
                                       0
                                   ).toLocaleString()}
-                                </td>
+                                </strong>
+                              </td>
 
-                                <td>
-                                  {formatDateTime(
-                                    member.updated_at
-                                  )}
-                                </td>
+                              <td>
+                                {Number(
+                                  member.lifetime_points ||
+                                    0
+                                ).toLocaleString()}
+                              </td>
 
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="admin-small-button"
-                                    onClick={() =>
-                                      openAdjustPoints(
-                                        member
-                                      )
-                                    }
-                                  >
-                                    <Edit3 size={14} />
-                                    Adjust
-                                  </button>
-                                </td>
+                              <td>
+                                {formatDateTime(
+                                  member.updated_at
+                                )}
+                              </td>
 
-                              </tr>
-                            );
-                          }
-                        )}
+                              <td>
+                                <button
+                                  type="button"
+                                  className="admin-small-button"
+                                  onClick={() =>
+                                    openPoints(
+                                      member
+                                    )
+                                  }
+                                >
+                                  <Edit3
+                                    size={14}
+                                  />
+                                  Adjust
+                                </button>
+                              </td>
 
-                      </tbody>
+                            </tr>
+                          );
+                        }
+                      )}
 
-                    </table>
+                    </tbody>
 
-                  </div>
+                  </table>
 
-                  {filteredRewardMembers.length ===
-                    0 && (
-                    <div className="admin-table-empty">
-                      No reward members found.
+                </div>
+
+              </div>
+            )}
+
+            {rewardSection ===
+              "milestones" && (
+              <div className="admin-card-grid">
+
+                {rewardCheckpoints.map(
+                  (item) => (
+                    <div
+                      className="admin-reward-box"
+                      key={item.id}
+                    >
+                      <span>
+                        {
+                          item.points_required
+                        }{" "}
+                        POINTS
+                      </span>
+
+                      <strong>
+                        {item.title}
+                      </strong>
+
+                      <p>
+                        {item.description ||
+                          "No description."}
+                      </p>
+
+                      <StatusBadge
+                        type={
+                          item.is_active
+                            ? "success"
+                            : "neutral"
+                        }
+                      >
+                        {item.is_active
+                          ? "Active"
+                          : "Disabled"}
+                      </StatusBadge>
                     </div>
-                  )}
-
-                </div>
+                  )
+                )}
 
               </div>
             )}
 
-            {rewardTab === "milestones" && (
-              <div>
+            {rewardSection ===
+              "offers" && (
+              <div className="admin-card-grid">
 
-                <div className="admin-section-heading compact">
+                {communityOffers.map(
+                  (offer) => (
+                    <div
+                      className="admin-reward-box"
+                      key={offer.id}
+                    >
 
-                  <div>
-                    <span>REWARD PROGRESSION</span>
-                    <h3>
-                      Membership Milestones
-                    </h3>
-                  </div>
+                      <span>
+                        {offer.required_points}{" "}
+                        POINTS
+                      </span>
 
-                  <button
-                    type="button"
-                    className="admin-primary-button"
-                    onClick={
-                      openCreateMilestone
-                    }
-                  >
-                    <Plus size={15} />
-                    Add Milestone
-                  </button>
+                      <strong>
+                        {offer.title}
+                      </strong>
 
-                </div>
+                      <p>
+                        {offer.description ||
+                          offer.benefit ||
+                          "Reward benefit"}
+                      </p>
 
-                <div className="admin-list-card">
+                      {Number(
+                        offer.discount_value ||
+                          0
+                      ) > 0 && (
+                        <small>
+                          {offer.discount_type ===
+                          "percentage"
+                            ? `${offer.discount_value}% discount`
+                            : `৳${Number(
+                                offer.discount_value
+                              ).toLocaleString()} discount`}
+                        </small>
+                      )}
 
-                  {rewardCheckpoints.map(
-                    (item) => (
-                      <div
-                        className="admin-list-row"
-                        key={item.id}
+                      <StatusBadge
+                        type={
+                          offer.is_active
+                            ? "success"
+                            : "neutral"
+                        }
                       >
+                        {offer.is_active
+                          ? "Active"
+                          : "Disabled"}
+                      </StatusBadge>
 
-                        <div className="admin-list-main">
-
-                          <div className="admin-list-icon">
-                            <Trophy size={17} />
-                          </div>
-
-                          <div>
-                            <strong>
-                              {item.title}
-                            </strong>
-
-                            <small>
-                              {
-                                item.points_required
-                              }{" "}
-                              points
-
-                              {item.description
-                                ? ` · ${item.description}`
-                                : ""}
-                            </small>
-                          </div>
-
-                        </div>
-
-                        <div className="admin-list-actions">
-
-                          <StatusBadge
-                            type={
-                              item.is_active
-                                ? "success"
-                                : "muted"
-                            }
-                          >
-                            {item.is_active
-                              ? "Active"
-                              : "Disabled"}
-                          </StatusBadge>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openEditMilestone(
-                                item
-                              )
-                            }
-                          >
-                            <Edit3 size={14} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleMilestone(
-                                item
-                              )
-                            }
-                          >
-                            {item.is_active ? (
-                              <X size={14} />
-                            ) : (
-                              <Check size={14} />
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            className="danger"
-                            onClick={() =>
-                              deleteMilestone(
-                                item
-                              )
-                            }
-                          >
-                            <Trash2 size={14} />
-                          </button>
-
-                        </div>
-
-                      </div>
-                    )
-                  )}
-
-                </div>
+                    </div>
+                  )
+                )}
 
               </div>
             )}
 
-            {rewardTab === "offers" && (
-              <div>
-
-                <div className="admin-section-heading compact">
-
-                  <div>
-                    <span>REDEMPTION CATALOG</span>
-                    <h3>
-                      Reward Offers
-                    </h3>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="admin-primary-button"
-                    onClick={openCreateOffer}
-                  >
-                    <Plus size={15} />
-                    Add Reward
-                  </button>
-
-                </div>
-
-                <div className="admin-card-grid">
-
-                  {communityOffers.map(
-                    (offer) => (
-                      <div
-                        className="admin-reward-card"
-                        key={offer.id}
-                      >
-
-                        <div className="admin-reward-card-top">
-
-                          <div className="admin-reward-icon">
-                            <Gift size={18} />
-                          </div>
-
-                          <StatusBadge
-                            type={
-                              offer.is_active
-                                ? "success"
-                                : "muted"
-                            }
-                          >
-                            {offer.is_active
-                              ? "Active"
-                              : "Disabled"}
-                          </StatusBadge>
-
-                        </div>
-
-                        <span className="admin-card-eyebrow">
-                          {offer.required_points} POINTS
-                        </span>
-
-                        <h3>
-                          {offer.title}
-                        </h3>
-
-                        <p>
-                          {offer.description ||
-                            "Reward offer"}
-                        </p>
-
-                        <strong className="admin-benefit">
-                          {offer.benefit ||
-                            "Member benefit"}
-                        </strong>
-
-                        {Number(
-                          offer.discount_value || 0
-                        ) > 0 && (
-                          <small className="admin-discount-text">
-                            {offer.discount_type ===
-                            "percentage"
-                              ? `${offer.discount_value}% discount`
-                              : `৳${Number(
-                                  offer.discount_value
-                                ).toLocaleString()} discount`}
-                          </small>
-                        )}
-
-                        <div className="admin-card-actions">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openEditOffer(
-                                offer
-                              )
-                            }
-                          >
-                            <Edit3 size={14} />
-                            Edit
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleOffer(
-                                offer
-                              )
-                            }
-                          >
-                            {offer.is_active ? (
-                              <X size={14} />
-                            ) : (
-                              <Check size={14} />
-                            )}
-
-                            {offer.is_active
-                              ? "Disable"
-                              : "Enable"}
-                          </button>
-
-                          <button
-                            type="button"
-                            className="danger"
-                            onClick={() =>
-                              deleteOffer(
-                                offer
-                              )
-                            }
-                          >
-                            <Trash2 size={14} />
-                            Delete
-                          </button>
-
-                        </div>
-
-                      </div>
-                    )
-                  )}
-
-                </div>
-
-              </div>
-            )}
-
-            {rewardTab === "history" && (
-              <div className="admin-dashboard-grid">
+            {rewardSection ===
+              "history" && (
+              <div className="admin-overview-grid">
 
                 <div className="admin-panel">
 
-                  <div className="admin-panel-heading">
+                  <div className="admin-panel-header">
                     <div>
-                      <span>POINT ACTIVITY</span>
+                      <span>
+                        POINT ACTIVITY
+                      </span>
+
                       <h3>
-                        Reward Transactions
+                        Transactions
                       </h3>
                     </div>
                   </div>
@@ -3330,13 +3092,12 @@ export default function Admin() {
                   <div className="admin-history-list">
 
                     {rewardTransactions
-                      .slice(0, 30)
+                      .slice(0, 20)
                       .map((item) => (
                         <div
                           className="admin-history-row"
                           key={item.id}
                         >
-
                           <div>
                             <strong>
                               {item.type ||
@@ -3349,7 +3110,7 @@ export default function Admin() {
                             </small>
                           </div>
 
-                          <div
+                          <b
                             className={
                               Number(
                                 item.points
@@ -3364,8 +3125,7 @@ export default function Admin() {
                               ? "+"
                               : ""}
                             {item.points}
-                          </div>
-
+                          </b>
                         </div>
                       ))}
 
@@ -3375,11 +3135,14 @@ export default function Admin() {
 
                 <div className="admin-panel">
 
-                  <div className="admin-panel-heading">
+                  <div className="admin-panel-header">
                     <div>
-                      <span>REDEMPTIONS</span>
+                      <span>
+                        REDEMPTIONS
+                      </span>
+
                       <h3>
-                        Reward Redemptions
+                        Recent redemptions
                       </h3>
                     </div>
                   </div>
@@ -3387,16 +3150,15 @@ export default function Admin() {
                   <div className="admin-history-list">
 
                     {rewardRedemptions
-                      .slice(0, 30)
+                      .slice(0, 20)
                       .map((item) => (
                         <div
                           className="admin-history-row"
                           key={item.id}
                         >
-
                           <div>
                             <strong>
-                              Redemption
+                              Reward redeemed
                             </strong>
 
                             <small>
@@ -3405,10 +3167,11 @@ export default function Admin() {
                             </small>
                           </div>
 
-                          <div className="negative">
-                            -{item.points_used || 0}
-                          </div>
-
+                          <b className="negative">
+                            -
+                            {item.points_used ||
+                              0}
+                          </b>
                         </div>
                       ))}
 
@@ -3426,26 +3189,25 @@ export default function Admin() {
             COUPONS
         ====================================================== */}
 
-        {activeTab === "coupons" && (
-          <section className="admin-section">
+        {activeSection === "coupons" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
 
               <div>
-                <span>PROMOTION CONTROL</span>
+                <span>
+                  PROMOTION MANAGEMENT
+                </span>
 
-                <h2>Coupons</h2>
-
-                <p className="admin-heading-description">
-                  Create and manage promotional codes
-                  customers can use during booking.
-                </p>
+                <h2>
+                  Coupons
+                </h2>
               </div>
 
               <button
                 type="button"
                 className="admin-primary-button"
-                onClick={openCreateCoupon}
+                onClick={createCoupon}
               >
                 <Plus size={16} />
                 Create Coupon
@@ -3455,52 +3217,51 @@ export default function Admin() {
 
             <div className="admin-stat-grid">
 
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <TicketPercent size={18} />
-                </div>
+              <StatCard
+                icon={TicketPercent}
+                label="Total Coupons"
+                value={coupons.length}
+                detail="Created codes"
+              />
 
-                <span>Total Coupons</span>
-                <strong>{coupons.length}</strong>
-                <small>
-                  All created promotional codes
-                </small>
-              </div>
+              <StatCard
+                icon={Check}
+                label="Active"
+                value={activeCoupons}
+                detail="Currently enabled"
+              />
 
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Check size={18} />
-                </div>
+              <StatCard
+                icon={Activity}
+                label="Redemptions"
+                value={
+                  couponUsages.length
+                }
+                detail="Recorded uses"
+              />
 
-                <span>Active</span>
-                <strong>{activeCoupons}</strong>
-                <small>
-                  Currently available codes
-                </small>
-              </div>
-
-              <div className="admin-stat-card">
-                <div className="admin-stat-icon">
-                  <Activity size={18} />
-                </div>
-
-                <span>Redemptions</span>
-                <strong>{totalCouponUsage}</strong>
-                <small>
-                  Total recorded usage
-                </small>
-              </div>
+              <StatCard
+                icon={Settings2}
+                label="Usage Limit"
+                value={
+                  coupons.filter(
+                    (item) =>
+                      item.usage_limit
+                  ).length
+                }
+                detail="Limited campaigns"
+              />
 
             </div>
 
-            <div className="admin-filter-bar">
+            <div className="admin-toolbar">
 
-              <div className="admin-filter-input">
-                <Search size={15} />
+              <div className="admin-search-box">
+                <Search size={16} />
 
                 <input
                   type="text"
-                  placeholder="Search coupon code or title..."
+                  placeholder="Search coupon code..."
                   value={couponSearch}
                   onChange={(event) =>
                     setCouponSearch(
@@ -3509,6 +3270,10 @@ export default function Admin() {
                   }
                 />
               </div>
+
+              <span>
+                {filteredCoupons.length} coupons
+              </span>
 
             </div>
 
@@ -3525,7 +3290,7 @@ export default function Admin() {
                       <th>Usage</th>
                       <th>Validity</th>
                       <th>Status</th>
-                      <th>Actions</th>
+                      <th />
                     </tr>
                   </thead>
 
@@ -3533,16 +3298,17 @@ export default function Admin() {
 
                     {filteredCoupons.map(
                       (coupon) => {
-                        const usageCount =
+                        const usage =
                           couponUsages.filter(
-                            (usage) =>
+                            (item) =>
                               String(
-                                usage.coupon_id
+                                item.coupon_id
                               ) ===
                               String(coupon.id)
                           ).length;
 
-                        const now = Date.now();
+                        const now =
+                          Date.now();
 
                         const scheduled =
                           coupon.starts_at &&
@@ -3565,15 +3331,15 @@ export default function Admin() {
 
                             <td>
 
-                              <div className="admin-coupon-cell">
+                              <div className="admin-coupon">
 
-                                <div className="admin-coupon-icon">
+                                <div>
                                   <TicketPercent
-                                    size={17}
+                                    size={16}
                                   />
                                 </div>
 
-                                <div>
+                                <section>
                                   <strong>
                                     {coupon.code}
                                   </strong>
@@ -3582,22 +3348,20 @@ export default function Admin() {
                                     {coupon.title ||
                                       "Sportiva promotion"}
                                   </small>
-                                </div>
+                                </section>
 
                                 <button
                                   type="button"
-                                  className="admin-copy-button"
                                   onClick={() =>
-                                    copyCouponCode(
+                                    copyCoupon(
                                       coupon.code
                                     )
                                   }
+                                  title="Copy code"
                                 >
-                                  <span>
-                                    <ClipboardList
-                                      size={12}
-                                    />
-                                  </span>
+                                  <ClipboardList
+                                    size={13}
+                                  />
                                 </button>
 
                               </div>
@@ -3605,49 +3369,32 @@ export default function Admin() {
                             </td>
 
                             <td>
-                              <div className="admin-discount-cell">
-
-                                <strong>
-                                  {coupon.discount_type ===
-                                  "percentage"
-                                    ? `${Number(
-                                        coupon.discount_value
-                                      )}% OFF`
-                                    : `৳${Number(
-                                        coupon.discount_value
-                                      ).toLocaleString()} OFF`}
-                                </strong>
-
-                                {Number(
-                                  coupon.min_booking_amount ||
-                                    0
-                                ) > 0 && (
-                                  <small>
-                                    Min ৳
-                                    {Number(
-                                      coupon.min_booking_amount
-                                    ).toLocaleString()}
-                                  </small>
-                                )}
-
-                              </div>
+                              <strong>
+                                {coupon.discount_type ===
+                                "percentage"
+                                  ? `${Number(
+                                      coupon.discount_value
+                                    )}% OFF`
+                                  : `৳${Number(
+                                      coupon.discount_value
+                                    ).toLocaleString()} OFF`}
+                              </strong>
                             </td>
 
                             <td>
                               <strong>
-                                {usageCount}
+                                {usage}
                               </strong>
 
-                              <span className="admin-usage-limit">
+                              <span className="admin-muted">
                                 {coupon.usage_limit
                                   ? ` / ${coupon.usage_limit}`
-                                  : " / Unlimited"}
+                                  : " / unlimited"}
                               </span>
                             </td>
 
                             <td>
-                              <div className="admin-coupon-validity">
-
+                              <div className="admin-validity">
                                 <span>
                                   {coupon.starts_at
                                     ? formatDateTime(
@@ -3656,7 +3403,7 @@ export default function Admin() {
                                     : "Immediately"}
                                 </span>
 
-                                <span className="admin-validity-arrow">
+                                <span>
                                   →
                                 </span>
 
@@ -3667,14 +3414,13 @@ export default function Admin() {
                                       )
                                     : "No expiry"}
                                 </span>
-
                               </div>
                             </td>
 
                             <td>
 
                               {!coupon.is_active ? (
-                                <StatusBadge type="muted">
+                                <StatusBadge type="neutral">
                                   Inactive
                                 </StatusBadge>
                               ) : scheduled ? (
@@ -3695,16 +3441,15 @@ export default function Admin() {
 
                             <td>
 
-                              <div className="admin-table-actions">
+                              <div className="admin-row-actions">
 
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    openEditCoupon(
+                                    editCoupon(
                                       coupon
                                     )
                                   }
-                                  title="Edit"
                                 >
                                   <Edit3 size={14} />
                                 </button>
@@ -3715,11 +3460,6 @@ export default function Admin() {
                                     toggleCoupon(
                                       coupon
                                     )
-                                  }
-                                  title={
-                                    coupon.is_active
-                                      ? "Disable"
-                                      : "Enable"
                                   }
                                 >
                                   {coupon.is_active ? (
@@ -3739,7 +3479,6 @@ export default function Admin() {
                                       coupon
                                     )
                                   }
-                                  title="Delete"
                                 >
                                   <Trash2
                                     size={14}
@@ -3761,19 +3500,16 @@ export default function Admin() {
 
               </div>
 
-              {filteredCoupons.length === 0 && (
+              {filteredCoupons.length ===
+                0 && (
                 <div className="admin-empty">
-                  <div className="admin-empty-icon">
-                    <TicketPercent size={26} />
-                  </div>
-
+                  <TicketPercent size={28} />
                   <strong>
-                    No coupons found
+                    No coupons found.
                   </strong>
-
                   <span>
-                    Create your first Sportiva
-                    promotion.
+                    Create a promotional code
+                    to start.
                   </span>
                 </div>
               )}
@@ -3787,22 +3523,28 @@ export default function Admin() {
             ANNOUNCEMENTS
         ====================================================== */}
 
-        {activeTab === "announcements" && (
-          <section className="admin-section">
+        {activeSection ===
+          "announcements" && (
+          <section className="admin-content">
 
-            <div className="admin-section-heading">
+            <div className="admin-page-title-row">
 
               <div>
-                <span>COMMUNICATION CONTROL</span>
-                <h2>Announcements</h2>
+                <span>
+                  CUSTOMER COMMUNICATION
+                </span>
+
+                <h2>
+                  Announcements
+                </h2>
               </div>
 
               <button
                 type="button"
                 className="admin-primary-button"
                 onClick={() =>
-                  setShowAnnouncementForm(
-                    (value) => !value
+                  setShowAnnouncementModal(
+                    true
                   )
                 }
               >
@@ -3812,101 +3554,21 @@ export default function Admin() {
 
             </div>
 
-            {showAnnouncementForm && (
-              <form
-                className="admin-form-panel"
-                onSubmit={
-                  createAnnouncement
-                }
-              >
-
-                <div className="admin-form-grid">
-
-                  <label>
-                    Title
-
-                    <input
-                      type="text"
-                      value={
-                        announcementForm.title
-                      }
-                      onChange={(event) =>
-                        setAnnouncementForm(
-                          (current) => ({
-                            ...current,
-                            title:
-                              event.target.value,
-                          })
-                        )
-                      }
-                      placeholder="Weekend promotion"
-                      required
-                    />
-                  </label>
-
-                  <label className="full">
-                    Message
-
-                    <textarea
-                      rows="4"
-                      value={
-                        announcementForm.message
-                      }
-                      onChange={(event) =>
-                        setAnnouncementForm(
-                          (current) => ({
-                            ...current,
-                            message:
-                              event.target.value,
-                          })
-                        )
-                      }
-                      placeholder="Write the message customers will see..."
-                    />
-                  </label>
-
-                </div>
-
-                <div className="admin-form-actions">
-
-                  <button
-                    type="button"
-                    className="admin-secondary-button"
-                    onClick={() =>
-                      setShowAnnouncementForm(
-                        false
-                      )
-                    }
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="admin-primary-button"
-                  >
-                    <Megaphone size={15} />
-                    Publish
-                  </button>
-
-                </div>
-
-              </form>
-            )}
-
             <div className="admin-list-card">
 
               {announcements.map(
                 (announcement) => (
                   <div
-                    className="admin-list-row announcement-row"
+                    className="admin-list-item"
                     key={announcement.id}
                   >
 
-                    <div className="admin-list-main">
+                    <div className="admin-list-leading">
 
                       <div className="admin-list-icon">
-                        <Megaphone size={17} />
+                        <Megaphone
+                          size={17}
+                        />
                       </div>
 
                       <div>
@@ -3914,13 +3576,12 @@ export default function Admin() {
                           {announcement.title}
                         </strong>
 
-                        <small>
+                        <p>
                           {announcement.message ||
                             "No message"}
-                        </small>
+                        </p>
 
                         <small>
-                          Published{" "}
                           {formatDateTime(
                             announcement.created_at
                           )}
@@ -3929,13 +3590,13 @@ export default function Admin() {
 
                     </div>
 
-                    <div className="admin-list-actions">
+                    <div className="admin-list-trailing">
 
                       <StatusBadge
                         type={
                           announcement.is_active
                             ? "success"
-                            : "muted"
+                            : "neutral"
                         }
                       >
                         {announcement.is_active
@@ -3976,14 +3637,16 @@ export default function Admin() {
                 )
               )}
 
-              {announcements.length === 0 && (
+              {announcements.length ===
+                0 && (
                 <div className="admin-empty">
-                  <Megaphone size={26} />
+                  <Megaphone size={27} />
                   <strong>
                     No announcements yet.
                   </strong>
                   <span>
-                    Publish an update for customers.
+                    Publish your first customer
+                    update.
                   </span>
                 </div>
               )}
@@ -3999,795 +3662,377 @@ export default function Admin() {
           TURF MODAL
       ======================================================== */}
 
-      {showTurfForm && (
-        <div className="admin-modal-backdrop">
+      {showTurfModal && (
+        <Modal
+          eyebrow="FACILITY MANAGEMENT"
+          title={
+            editingTurf
+              ? "Edit Turf"
+              : "Add Turf"
+          }
+          onClose={() =>
+            setShowTurfModal(false)
+          }
+        >
+          <form
+            className="admin-modal-form"
+            onSubmit={saveTurf}
+          >
 
-          <div className="admin-modal">
+            <label>
+              Turf Name
 
-            <div className="admin-modal-header">
-              <div>
-                <span>FACILITY MANAGEMENT</span>
-                <h2>
-                  {editingTurf
-                    ? "Edit Turf"
-                    : "Add Turf"}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowTurfForm(false)
+              <input
+                type="text"
+                value={turfForm.name}
+                onChange={(event) =>
+                  setTurfForm(
+                    (current) => ({
+                      ...current,
+                      name: event.target.value,
+                    })
+                  )
                 }
-              >
-                <X size={18} />
-              </button>
-            </div>
+                placeholder="Sportiva Main Turf"
+                required
+              />
+            </label>
 
-            <form
-              className="admin-modal-form"
-              onSubmit={saveTurf}
-            >
+            <label>
+              Description
+
+              <textarea
+                rows="4"
+                value={
+                  turfForm.description
+                }
+                onChange={(event) =>
+                  setTurfForm(
+                    (current) => ({
+                      ...current,
+                      description:
+                        event.target.value,
+                    })
+                  )
+                }
+              />
+            </label>
+
+            <div className="admin-form-grid">
 
               <label>
-                Turf Name
+                Price / Hour
 
                 <input
-                  type="text"
-                  value={turfForm.name}
+                  type="number"
+                  min="1"
+                  value={
+                    turfForm.price_per_hour
+                  }
                   onChange={(event) =>
                     setTurfForm(
                       (current) => ({
                         ...current,
-                        name: event.target.value,
+                        price_per_hour:
+                          event.target.value,
                       })
                     )
                   }
-                  placeholder="Sportiva Main Turf"
                   required
                 />
               </label>
 
               <label>
-                Description
+                Image URL
 
-                <textarea
-                  rows="4"
-                  value={turfForm.description}
+                <input
+                  type="url"
+                  value={
+                    turfForm.image_url
+                  }
                   onChange={(event) =>
                     setTurfForm(
                       (current) => ({
                         ...current,
-                        description:
+                        image_url:
                           event.target.value,
                       })
                     )
                   }
-                  placeholder="Describe the facility..."
+                  placeholder="https://..."
                 />
               </label>
 
-              <div className="admin-form-grid">
+            </div>
 
-                <label>
-                  Price / Hour
+            <div className="admin-modal-actions">
 
-                  <input
-                    type="number"
-                    min="1"
-                    value={
-                      turfForm.price_per_hour
-                    }
-                    onChange={(event) =>
-                      setTurfForm(
-                        (current) => ({
-                          ...current,
-                          price_per_hour:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder="2500"
-                    required
-                  />
-                </label>
+              <button
+                type="button"
+                className="admin-secondary-button"
+                onClick={() =>
+                  setShowTurfModal(false)
+                }
+              >
+                Cancel
+              </button>
 
-                <label>
-                  Image URL
+              <button
+                type="submit"
+                className="admin-primary-button"
+                disabled={saving}
+              >
+                {saving
+                  ? "Saving..."
+                  : editingTurf
+                  ? "Save Changes"
+                  : "Create Turf"}
+              </button>
 
-                  <input
-                    type="url"
-                    value={
-                      turfForm.image_url
-                    }
-                    onChange={(event) =>
-                      setTurfForm(
-                        (current) => ({
-                          ...current,
-                          image_url:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder="https://..."
-                  />
-                </label>
+            </div>
 
-              </div>
-
-              <div className="admin-form-actions">
-
-                <button
-                  type="button"
-                  className="admin-secondary-button"
-                  onClick={() =>
-                    setShowTurfForm(false)
-                  }
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="admin-primary-button"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingTurf
-                    ? "Save Changes"
-                    : "Create Turf"}
-                </button>
-
-              </div>
-
-            </form>
-
-          </div>
-
-        </div>
+          </form>
+        </Modal>
       )}
 
       {/* ========================================================
           SLOT MODAL
       ======================================================== */}
 
-      {showSlotForm && (
-        <div className="admin-modal-backdrop">
+      {showSlotModal && (
+        <Modal
+          eyebrow="AVAILABILITY MANAGEMENT"
+          title={
+            editingSlot
+              ? "Edit Time Slot"
+              : "Add Time Slot"
+          }
+          onClose={() =>
+            setShowSlotModal(false)
+          }
+        >
+          <form
+            className="admin-modal-form"
+            onSubmit={saveSlot}
+          >
 
-          <div className="admin-modal">
+            <div className="admin-form-grid">
 
-            <div className="admin-modal-header">
-              <div>
-                <span>
-                  AVAILABILITY MANAGEMENT
-                </span>
-                <h2>
-                  {editingSlot
-                    ? "Edit Time Slot"
-                    : "Add Time Slot"}
-                </h2>
-              </div>
+              <label>
+                Turf
 
-              <button
-                type="button"
-                onClick={() =>
-                  setShowSlotForm(false)
-                }
-              >
-                <X size={18} />
-              </button>
-            </div>
+                <select
+                  value={slotForm.turf_id}
+                  onChange={(event) =>
+                    setSlotForm(
+                      (current) => ({
+                        ...current,
+                        turf_id:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  required
+                >
+                  <option value="">
+                    Select turf
+                  </option>
 
-            <form
-              className="admin-modal-form"
-              onSubmit={saveSlot}
-            >
-
-              <div className="admin-form-grid">
-
-                <label>
-                  Turf
-
-                  <select
-                    value={slotForm.turf_id}
-                    onChange={(event) =>
-                      setSlotForm(
-                        (current) => ({
-                          ...current,
-                          turf_id:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    required
-                  >
-                    <option value="">
-                      Select Turf
+                  {turfs.map((turf) => (
+                    <option
+                      key={turf.id}
+                      value={turf.id}
+                    >
+                      {turf.name}
                     </option>
+                  ))}
+                </select>
+              </label>
 
-                    {turfs.map((turf) => (
-                      <option
-                        key={turf.id}
-                        value={turf.id}
-                      >
-                        {turf.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  Date
-
-                  <input
-                    type="date"
-                    value={slotForm.slot_date}
-                    onChange={(event) =>
-                      setSlotForm(
-                        (current) => ({
-                          ...current,
-                          slot_date:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    required
-                  />
-                </label>
-
-                <label>
-                  Start Time
-
-                  <input
-                    type="time"
-                    value={
-                      slotForm.start_time
-                    }
-                    onChange={(event) =>
-                      setSlotForm(
-                        (current) => ({
-                          ...current,
-                          start_time:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    required
-                  />
-                </label>
-
-                <label>
-                  End Time
-
-                  <input
-                    type="time"
-                    value={slotForm.end_time}
-                    onChange={(event) =>
-                      setSlotForm(
-                        (current) => ({
-                          ...current,
-                          end_time:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    required
-                  />
-                </label>
-
-              </div>
-
-              <label className="admin-checkbox-row">
+              <label>
+                Date
 
                 <input
-                  type="checkbox"
-                  checked={
-                    slotForm.is_available
+                  type="date"
+                  value={
+                    slotForm.slot_date
                   }
                   onChange={(event) =>
                     setSlotForm(
                       (current) => ({
                         ...current,
-                        is_available:
-                          event.target.checked,
+                        slot_date:
+                          event.target.value,
                       })
                     )
                   }
+                  required
                 />
-
-                <span>
-                  Slot available for booking
-                </span>
-
               </label>
 
-              <div className="admin-form-actions">
+              <label>
+                Start Time
 
-                <button
-                  type="button"
-                  className="admin-secondary-button"
-                  onClick={() =>
-                    setShowSlotForm(false)
+                <input
+                  type="time"
+                  value={
+                    slotForm.start_time
                   }
-                >
-                  Cancel
-                </button>
+                  onChange={(event) =>
+                    setSlotForm(
+                      (current) => ({
+                        ...current,
+                        start_time:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  required
+                />
+              </label>
 
-                <button
-                  type="submit"
-                  className="admin-primary-button"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingSlot
-                    ? "Save Changes"
-                    : "Create Slot"}
-                </button>
+              <label>
+                End Time
 
-              </div>
+                <input
+                  type="time"
+                  value={
+                    slotForm.end_time
+                  }
+                  onChange={(event) =>
+                    setSlotForm(
+                      (current) => ({
+                        ...current,
+                        end_time:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  required
+                />
+              </label>
 
-            </form>
+            </div>
 
-          </div>
+            <label className="admin-check-row">
 
-        </div>
+              <input
+                type="checkbox"
+                checked={
+                  slotForm.is_available
+                }
+                onChange={(event) =>
+                  setSlotForm(
+                    (current) => ({
+                      ...current,
+                      is_available:
+                        event.target.checked,
+                    })
+                  )
+                }
+              />
+
+              <span>
+                Available for customer booking
+              </span>
+
+            </label>
+
+            <div className="admin-modal-actions">
+
+              <button
+                type="button"
+                className="admin-secondary-button"
+                onClick={() =>
+                  setShowSlotModal(false)
+                }
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="admin-primary-button"
+                disabled={saving}
+              >
+                {saving
+                  ? "Saving..."
+                  : editingSlot
+                  ? "Save Changes"
+                  : "Create Slot"}
+              </button>
+
+            </div>
+
+          </form>
+        </Modal>
       )}
 
       {/* ========================================================
           COUPON MODAL
       ======================================================== */}
 
-      {showCouponForm && (
-        <div
-          className="admin-modal-backdrop"
-          onMouseDown={(event) => {
-            if (
-              event.target ===
-                event.currentTarget &&
-              !saving
-            ) {
-              setShowCouponForm(false);
-            }
-          }}
+      {showCouponModal && (
+        <Modal
+          wide
+          eyebrow="PROMOTION MANAGEMENT"
+          title={
+            editingCoupon
+              ? "Edit Coupon"
+              : "Create Coupon"
+          }
+          onClose={() =>
+            setShowCouponModal(false)
+          }
         >
+          <form
+            className="admin-modal-form"
+            onSubmit={saveCoupon}
+          >
 
-          <div className="admin-modal admin-coupon-modal">
+            <div className="admin-form-grid">
 
-            <div className="admin-modal-header">
+              <label className="full">
+                Coupon Code
 
-              <div>
-                <span>
-                  SPORTIVA PROMOTION SYSTEM
-                </span>
-
-                <h2>
-                  {editingCoupon
-                    ? "Edit Coupon"
-                    : "Create Coupon"}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowCouponForm(false)
-                }
-              >
-                <X size={18} />
-              </button>
-
-            </div>
-
-            <form
-              className="admin-modal-form"
-              onSubmit={saveCoupon}
-            >
-
-              <div className="admin-form-grid">
-
-                <label className="full">
-                  Coupon Code
-
-                  <div className="admin-code-row">
-
-                    <input
-                      type="text"
-                      value={
-                        couponForm.code
-                      }
-                      onChange={(event) =>
-                        setCouponForm(
-                          (current) => ({
-                            ...current,
-                            code: event.target.value.toUpperCase(),
-                          })
-                        )
-                      }
-                      placeholder="SPORTIVA-XXXXXX"
-                      required
-                    />
-
-                    <button
-                      type="button"
-                      className="admin-generate-button"
-                      onClick={() =>
-                        setCouponForm(
-                          (current) => ({
-                            ...current,
-                            code:
-                              generateCouponCode(),
-                          })
-                        )
-                      }
-                    >
-                      Generate
-                    </button>
-
-                  </div>
-
-                </label>
-
-                <label>
-                  Title
+                <div className="admin-code-input">
 
                   <input
                     type="text"
                     value={
-                      couponForm.title
+                      couponForm.code
                     }
                     onChange={(event) =>
                       setCouponForm(
                         (current) => ({
                           ...current,
-                          title:
-                            event.target.value,
+                          code:
+                            event.target.value.toUpperCase(),
                         })
                       )
                     }
-                    placeholder="Weekend Special"
+                    placeholder="SPORTIVA-XXXXXX"
+                    required
                   />
-                </label>
 
-                <label>
-                  Discount Type
-
-                  <select
-                    value={
-                      couponForm.discount_type
-                    }
-                    onChange={(event) =>
+                  <button
+                    type="button"
+                    onClick={() =>
                       setCouponForm(
                         (current) => ({
                           ...current,
-                          discount_type:
-                            event.target.value,
+                          code:
+                            generateCouponCode(),
                         })
                       )
                     }
                   >
-                    <option value="percentage">
-                      Percentage
-                    </option>
+                    Generate
+                  </button>
 
-                    <option value="fixed">
-                      Fixed Amount
-                    </option>
-                  </select>
-                </label>
-
-                <label>
-                  Discount Value
-
-                  <div className="admin-input-symbol">
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={
-                        couponForm.discount_value
-                      }
-                      onChange={(event) =>
-                        setCouponForm(
-                          (current) => ({
-                            ...current,
-                            discount_value:
-                              event.target.value,
-                          })
-                        )
-                      }
-                      placeholder={
-                        couponForm.discount_type ===
-                        "percentage"
-                          ? "10"
-                          : "300"
-                      }
-                      required
-                    />
-
-                    <span>
-                      {couponForm.discount_type ===
-                      "percentage"
-                        ? "%"
-                        : "৳"}
-                    </span>
-
-                  </div>
-                </label>
-
-                <label>
-                  Minimum Booking
-
-                  <div className="admin-input-symbol">
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        couponForm.min_booking_amount
-                      }
-                      onChange={(event) =>
-                        setCouponForm(
-                          (current) => ({
-                            ...current,
-                            min_booking_amount:
-                              event.target.value,
-                          })
-                        )
-                      }
-                    />
-
-                    <span>৳</span>
-
-                  </div>
-                </label>
-
-                <label>
-                  Maximum Discount
-
-                  <div className="admin-input-symbol">
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        couponForm.max_discount_amount
-                      }
-                      onChange={(event) =>
-                        setCouponForm(
-                          (current) => ({
-                            ...current,
-                            max_discount_amount:
-                              event.target.value,
-                          })
-                        )
-                      }
-                      disabled={
-                        couponForm.discount_type !==
-                        "percentage"
-                      }
-                      placeholder="Optional"
-                    />
-
-                    <span>৳</span>
-
-                  </div>
-                </label>
-
-                <label>
-                  Total Usage Limit
-
-                  <input
-                    type="number"
-                    min="1"
-                    value={
-                      couponForm.usage_limit
-                    }
-                    onChange={(event) =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          usage_limit:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder="Unlimited"
-                  />
-                </label>
-
-                <label>
-                  Per User Limit
-
-                  <input
-                    type="number"
-                    min="1"
-                    value={
-                      couponForm.per_user_limit
-                    }
-                    onChange={(event) =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          per_user_limit:
-                            event.target.value,
-                        })
-                      )
-                    }
-                  />
-                </label>
-
-                <label>
-                  Starts At
-
-                  <input
-                    type="datetime-local"
-                    value={
-                      couponForm.starts_at
-                    }
-                    onChange={(event) =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          starts_at:
-                            event.target.value,
-                        })
-                      )
-                    }
-                  />
-                </label>
-
-                <label>
-                  Expires At
-
-                  <input
-                    type="datetime-local"
-                    value={
-                      couponForm.expires_at
-                    }
-                    onChange={(event) =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          expires_at:
-                            event.target.value,
-                        })
-                      )
-                    }
-                  />
-                </label>
-
-                <label className="full">
-                  Description
-
-                  <textarea
-                    rows="3"
-                    value={
-                      couponForm.description
-                    }
-                    onChange={(event) =>
-                      setCouponForm(
-                        (current) => ({
-                          ...current,
-                          description:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder="Describe this promotion..."
-                  />
-                </label>
-
-              </div>
-
-              <label className="admin-checkbox-row">
-
-                <input
-                  type="checkbox"
-                  checked={
-                    couponForm.is_active
-                  }
-                  onChange={(event) =>
-                    setCouponForm(
-                      (current) => ({
-                        ...current,
-                        is_active:
-                          event.target.checked,
-                      })
-                    )
-                  }
-                />
-
-                <span>
-                  Coupon is active
-                </span>
+                </div>
 
               </label>
-
-              <div className="admin-form-actions">
-
-                <button
-                  type="button"
-                  className="admin-secondary-button"
-                  onClick={() =>
-                    setShowCouponForm(false)
-                  }
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="admin-primary-button"
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <RefreshCw
-                        size={15}
-                        className="admin-spin"
-                      />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={15} />
-                      {editingCoupon
-                        ? "Save Changes"
-                        : "Create Coupon"}
-                    </>
-                  )}
-                </button>
-
-              </div>
-
-            </form>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* ========================================================
-          MILESTONE MODAL
-      ======================================================== */}
-
-      {showMilestoneForm && (
-        <div className="admin-modal-backdrop">
-
-          <div className="admin-modal">
-
-            <div className="admin-modal-header">
-
-              <div>
-                <span>
-                  REWARD PROGRESSION
-                </span>
-
-                <h2>
-                  {editingMilestone
-                    ? "Edit Milestone"
-                    : "Create Milestone"}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowMilestoneForm(false)
-                }
-              >
-                <X size={18} />
-              </button>
-
-            </div>
-
-            <form
-              className="admin-modal-form"
-              onSubmit={saveMilestone}
-            >
 
               <label>
                 Title
@@ -4795,10 +4040,10 @@ export default function Admin() {
                 <input
                   type="text"
                   value={
-                    milestoneForm.title
+                    couponForm.title
                   }
                   onChange={(event) =>
-                    setMilestoneForm(
+                    setCouponForm(
                       (current) => ({
                         ...current,
                         title:
@@ -4806,44 +4051,200 @@ export default function Admin() {
                       })
                     )
                   }
-                  placeholder="Pro Player"
+                  placeholder="Weekend Special"
+                />
+              </label>
+
+              <label>
+                Discount Type
+
+                <select
+                  value={
+                    couponForm.discount_type
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        discount_type:
+                          event.target.value,
+                      })
+                    )
+                  }
+                >
+                  <option value="percentage">
+                    Percentage
+                  </option>
+
+                  <option value="fixed">
+                    Fixed Amount
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                Discount Value
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    couponForm.discount_value
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        discount_value:
+                          event.target.value,
+                      })
+                    )
+                  }
                   required
                 />
               </label>
 
               <label>
-                Required Points
+                Minimum Booking
 
                 <input
                   type="number"
                   min="0"
                   value={
-                    milestoneForm.points_required
+                    couponForm.min_booking_amount
                   }
                   onChange={(event) =>
-                    setMilestoneForm(
+                    setCouponForm(
                       (current) => ({
                         ...current,
-                        points_required:
+                        min_booking_amount:
                           event.target.value,
                       })
                     )
                   }
-                  placeholder="150"
-                  required
                 />
               </label>
 
               <label>
+                Maximum Discount
+
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    couponForm.max_discount_amount
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        max_discount_amount:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  disabled={
+                    couponForm.discount_type !==
+                    "percentage"
+                  }
+                  placeholder="Optional"
+                />
+              </label>
+
+              <label>
+                Total Usage Limit
+
+                <input
+                  type="number"
+                  min="1"
+                  value={
+                    couponForm.usage_limit
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        usage_limit:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  placeholder="Unlimited"
+                />
+              </label>
+
+              <label>
+                Per User Limit
+
+                <input
+                  type="number"
+                  min="1"
+                  value={
+                    couponForm.per_user_limit
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        per_user_limit:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Starts At
+
+                <input
+                  type="datetime-local"
+                  value={
+                    couponForm.starts_at
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        starts_at:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Expires At
+
+                <input
+                  type="datetime-local"
+                  value={
+                    couponForm.expires_at
+                  }
+                  onChange={(event) =>
+                    setCouponForm(
+                      (current) => ({
+                        ...current,
+                        expires_at:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <label className="full">
                 Description
 
                 <textarea
-                  rows="4"
+                  rows="3"
                   value={
-                    milestoneForm.description
+                    couponForm.description
                   }
                   onChange={(event) =>
-                    setMilestoneForm(
+                    setCouponForm(
                       (current) => ({
                         ...current,
                         description:
@@ -4851,300 +4252,156 @@ export default function Admin() {
                       })
                     )
                   }
-                  placeholder="Describe this membership milestone..."
+                  placeholder="Describe the promotion..."
                 />
               </label>
 
-              <label className="admin-checkbox-row">
+            </div>
 
-                <input
-                  type="checkbox"
-                  checked={
-                    milestoneForm.is_active
-                  }
-                  onChange={(event) =>
-                    setMilestoneForm(
-                      (current) => ({
-                        ...current,
-                        is_active:
-                          event.target.checked,
-                      })
-                    )
-                  }
-                />
+            <label className="admin-check-row">
 
-                <span>
-                  Milestone is active
-                </span>
+              <input
+                type="checkbox"
+                checked={
+                  couponForm.is_active
+                }
+                onChange={(event) =>
+                  setCouponForm(
+                    (current) => ({
+                      ...current,
+                      is_active:
+                        event.target.checked,
+                    })
+                  )
+                }
+              />
 
-              </label>
+              <span>
+                Coupon is active
+              </span>
 
-              <div className="admin-form-actions">
+            </label>
 
-                <button
-                  type="button"
-                  className="admin-secondary-button"
-                  onClick={() =>
-                    setShowMilestoneForm(false)
-                  }
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="admin-primary-button"
-                >
-                  <Check size={15} />
-                  {editingMilestone
-                    ? "Save Changes"
-                    : "Create Milestone"}
-                </button>
-
-              </div>
-
-            </form>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* ========================================================
-          REWARD OFFER MODAL
-      ======================================================== */}
-
-      {showOfferForm && (
-        <div className="admin-modal-backdrop">
-
-          <div className="admin-modal">
-
-            <div className="admin-modal-header">
-
-              <div>
-                <span>
-                  REWARD CATALOG
-                </span>
-
-                <h2>
-                  {editingOffer
-                    ? "Edit Reward"
-                    : "Create Reward"}
-                </h2>
-              </div>
+            <div className="admin-modal-actions">
 
               <button
                 type="button"
+                className="admin-secondary-button"
                 onClick={() =>
-                  setShowOfferForm(false)
+                  setShowCouponModal(false)
                 }
               >
-                <X size={18} />
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="admin-primary-button"
+                disabled={saving}
+              >
+                {saving
+                  ? "Saving..."
+                  : editingCoupon
+                  ? "Save Changes"
+                  : "Create Coupon"}
               </button>
 
             </div>
 
-            <form
-              className="admin-modal-form"
-              onSubmit={saveOffer}
-            >
+          </form>
+        </Modal>
+      )}
 
-              <label>
-                Reward Title
+      {/* ========================================================
+          ANNOUNCEMENT MODAL
+      ======================================================== */}
 
-                <input
-                  type="text"
-                  value={offerForm.title}
-                  onChange={(event) =>
-                    setOfferForm(
-                      (current) => ({
-                        ...current,
-                        title:
-                          event.target.value,
-                      })
-                    )
-                  }
-                  placeholder="5% Booking Discount"
-                  required
-                />
-              </label>
+      {showAnnouncementModal && (
+        <Modal
+          eyebrow="CUSTOMER COMMUNICATION"
+          title="New Announcement"
+          onClose={() =>
+            setShowAnnouncementModal(
+              false
+            )
+          }
+        >
+          <form
+            className="admin-modal-form"
+            onSubmit={
+              createAnnouncement
+            }
+          >
 
-              <div className="admin-form-grid">
+            <label>
+              Title
 
-                <label>
-                  Required Points
+              <input
+                type="text"
+                value={
+                  announcementForm.title
+                }
+                onChange={(event) =>
+                  setAnnouncementForm(
+                    (current) => ({
+                      ...current,
+                      title:
+                        event.target.value,
+                    })
+                  )
+                }
+                placeholder="Weekend promotion"
+                required
+              />
+            </label>
 
-                  <input
-                    type="number"
-                    min="0"
-                    value={
-                      offerForm.required_points
-                    }
-                    onChange={(event) =>
-                      setOfferForm(
-                        (current) => ({
-                          ...current,
-                          required_points:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder="100"
-                    required
-                  />
-                </label>
+            <label>
+              Message
 
-                <label>
-                  Discount Type
+              <textarea
+                rows="5"
+                value={
+                  announcementForm.message
+                }
+                onChange={(event) =>
+                  setAnnouncementForm(
+                    (current) => ({
+                      ...current,
+                      message:
+                        event.target.value,
+                    })
+                  )
+                }
+                placeholder="Write the customer-facing message..."
+              />
+            </label>
 
-                  <select
-                    value={
-                      offerForm.discount_type
-                    }
-                    onChange={(event) =>
-                      setOfferForm(
-                        (current) => ({
-                          ...current,
-                          discount_type:
-                            event.target.value,
-                        })
-                      )
-                    }
-                  >
-                    <option value="percentage">
-                      Percentage
-                    </option>
+            <div className="admin-modal-actions">
 
-                    <option value="fixed">
-                      Fixed Amount
-                    </option>
-                  </select>
-                </label>
+              <button
+                type="button"
+                className="admin-secondary-button"
+                onClick={() =>
+                  setShowAnnouncementModal(
+                    false
+                  )
+                }
+              >
+                Cancel
+              </button>
 
-                <label>
-                  Discount Value
+              <button
+                type="submit"
+                className="admin-primary-button"
+              >
+                <Megaphone size={15} />
+                Publish
+              </button>
 
-                  <input
-                    type="number"
-                    min="0"
-                    value={
-                      offerForm.discount_value
-                    }
-                    onChange={(event) =>
-                      setOfferForm(
-                        (current) => ({
-                          ...current,
-                          discount_value:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder={
-                      offerForm.discount_type ===
-                      "percentage"
-                        ? "5"
-                        : "300"
-                    }
-                  />
-                </label>
+            </div>
 
-                <label>
-                  Benefit
-
-                  <input
-                    type="text"
-                    value={
-                      offerForm.benefit
-                    }
-                    onChange={(event) =>
-                      setOfferForm(
-                        (current) => ({
-                          ...current,
-                          benefit:
-                            event.target.value,
-                        })
-                      )
-                    }
-                    placeholder="5% off your next booking"
-                  />
-                </label>
-
-              </div>
-
-              <label>
-                Description
-
-                <textarea
-                  rows="4"
-                  value={
-                    offerForm.description
-                  }
-                  onChange={(event) =>
-                    setOfferForm(
-                      (current) => ({
-                        ...current,
-                        description:
-                          event.target.value,
-                      })
-                    )
-                  }
-                  placeholder="Explain the reward..."
-                />
-              </label>
-
-              <label className="admin-checkbox-row">
-
-                <input
-                  type="checkbox"
-                  checked={
-                    offerForm.is_active
-                  }
-                  onChange={(event) =>
-                    setOfferForm(
-                      (current) => ({
-                        ...current,
-                        is_active:
-                          event.target.checked,
-                      })
-                    )
-                  }
-                />
-
-                <span>
-                  Reward offer is active
-                </span>
-
-              </label>
-
-              <div className="admin-form-actions">
-
-                <button
-                  type="button"
-                  className="admin-secondary-button"
-                  onClick={() =>
-                    setShowOfferForm(false)
-                  }
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="admin-primary-button"
-                >
-                  <Check size={15} />
-                  {editingOffer
-                    ? "Save Changes"
-                    : "Create Reward"}
-                </button>
-
-              </div>
-
-            </form>
-
-          </div>
-
-        </div>
+          </form>
+        </Modal>
       )}
 
       {/* ========================================================
@@ -5152,144 +4409,123 @@ export default function Admin() {
       ======================================================== */}
 
       {showPointsModal &&
-        selectedRewardMember && (
-          <div className="admin-modal-backdrop">
+        selectedMember && (
+          <Modal
+            eyebrow="REWARDS MANAGEMENT"
+            title="Adjust Member Points"
+            onClose={() =>
+              setShowPointsModal(
+                false
+              )
+            }
+          >
+            <div className="admin-selected-member">
 
-            <div className="admin-modal admin-small-modal">
+              <div>
+                {users
+                  .find(
+                    (user) =>
+                      user.id ===
+                      selectedMember.user_id
+                  )
+                  ?.full_name?.charAt(0)
+                  ?.toUpperCase() || "U"}
+              </div>
 
-              <div className="admin-modal-header">
+              <section>
+                <strong>
+                  {
+                    users.find(
+                      (user) =>
+                        user.id ===
+                        selectedMember.user_id
+                    )?.full_name
+                  }
+                </strong>
 
-                <div>
-                  <span>
-                    REWARD MANAGEMENT
-                  </span>
+                <span>
+                  Current balance:{" "}
+                  {selectedMember.points ||
+                    0}{" "}
+                  points
+                </span>
+              </section>
 
-                  <h2>
-                    Adjust Points
-                  </h2>
-                </div>
+            </div>
+
+            <div className="admin-modal-form">
+
+              <label>
+                Points
+
+                <input
+                  type="number"
+                  min="1"
+                  value={pointsAmount}
+                  onChange={(event) =>
+                    setPointsAmount(
+                      event.target.value
+                    )
+                  }
+                  placeholder="10"
+                />
+              </label>
+
+              <label>
+                Reason
+
+                <textarea
+                  rows="3"
+                  value={pointsReason}
+                  onChange={(event) =>
+                    setPointsReason(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Reason for adjustment..."
+                />
+              </label>
+
+              <div className="admin-modal-actions">
 
                 <button
                   type="button"
+                  className="admin-secondary-button"
                   onClick={() =>
-                    setShowPointsModal(false)
+                    setShowPointsModal(
+                      false
+                    )
                   }
                 >
-                  <X size={18} />
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  className="admin-secondary-button"
+                  onClick={() =>
+                    adjustPoints("remove")
+                  }
+                  disabled={saving}
+                >
+                  Deduct
+                </button>
+
+                <button
+                  type="button"
+                  className="admin-primary-button"
+                  onClick={() =>
+                    adjustPoints("add")
+                  }
+                  disabled={saving}
+                >
+                  Add Points
                 </button>
 
               </div>
 
-              <div className="admin-points-member">
-
-                <div className="admin-mini-avatar">
-                  {users
-                    .find(
-                      (user) =>
-                        user.id ===
-                        selectedRewardMember.user_id
-                    )
-                    ?.full_name?.charAt(0)
-                    ?.toUpperCase() || "U"}
-                </div>
-
-                <div>
-                  <strong>
-                    {
-                      users.find(
-                        (user) =>
-                          user.id ===
-                          selectedRewardMember.user_id
-                      )?.full_name
-                    }
-                  </strong>
-
-                  <small>
-                    Current points:{" "}
-                    {
-                      selectedRewardMember.points
-                    }
-                  </small>
-                </div>
-
-              </div>
-
-              <div className="admin-modal-form">
-
-                <label>
-                  Points Amount
-
-                  <input
-                    type="number"
-                    min="1"
-                    value={pointsAmount}
-                    onChange={(event) =>
-                      setPointsAmount(
-                        event.target.value
-                      )
-                    }
-                    placeholder="10"
-                  />
-                </label>
-
-                <label>
-                  Reason
-
-                  <textarea
-                    rows="3"
-                    value={pointsReason}
-                    onChange={(event) =>
-                      setPointsReason(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Admin adjustment reason..."
-                  />
-                </label>
-
-                <div className="admin-form-actions">
-
-                  <button
-                    type="button"
-                    className="admin-secondary-button"
-                    onClick={() =>
-                      setShowPointsModal(false)
-                    }
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="button"
-                    className="admin-secondary-button"
-                    onClick={() =>
-                      adjustPoints("add")
-                    }
-                    disabled={saving}
-                  >
-                    <Plus size={15} />
-                    Add Points
-                  </button>
-
-                  <button
-                    type="button"
-                    className="admin-primary-button"
-                    onClick={() =>
-                      adjustPoints("remove")
-                    }
-                    disabled={saving}
-                  >
-                    <X size={15} />
-                    Deduct
-                  </button>
-
-                </div>
-
-              </div>
-
             </div>
-
-          </div>
+          </Modal>
         )}
 
     </div>
