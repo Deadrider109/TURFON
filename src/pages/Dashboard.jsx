@@ -287,8 +287,9 @@ function Dashboard() {
 
   const nextBooking = upcomingBookings[0] || null
 
-  const firstName =
-    profile?.full_name?.trim()?.split(" ")[0] || "Player"
+  // Use the complete name instead of extracting only the first name.
+  const displayName =
+    profile?.full_name?.trim() || "Player"
 
   if (loading) {
     return (
@@ -495,7 +496,7 @@ function Dashboard() {
             </p>
 
             <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
-              Welcome, {firstName}.
+              Welcome, {displayName}.
             </h1>
 
             <p className="mt-2 text-sm text-black/50 dark:text-white/45">
