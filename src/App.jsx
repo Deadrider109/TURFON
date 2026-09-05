@@ -1,15 +1,8 @@
-import {
-  BrowserRouter,
-  Navigate,
-  Outlet,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
+  Outlet,
   Route,
   Routes,
   useLocation,
@@ -49,7 +42,7 @@ function LoadingScreen({ message = "Loading..." }) {
             borderRadius: 12,
             border: "3px solid #dce9df",
             borderTopColor: "#176b3a",
-            animation: "spin 0.8s linear infinite",
+            animation: "sportivaSpin 0.8s linear infinite",
           }}
         />
 
@@ -78,7 +71,7 @@ function LoadingScreen({ message = "Loading..." }) {
 
       <style>
         {`
-          @keyframes spin {
+          @keyframes sportivaSpin {
             to {
               transform: rotate(360deg);
             }
@@ -89,8 +82,13 @@ function LoadingScreen({ message = "Loading..." }) {
   );
 }
 
+/* =========================================================
+   USER PROTECTED ROUTES
+   ========================================================= */
+
 function ProtectedRoute() {
   const location = useLocation();
+
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
 
@@ -98,26 +96,39 @@ function ProtectedRoute() {
     let mounted = true;
 
     const checkSession = async () => {
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session: currentSession },
+        } = await supabase.auth.getSession();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      setSession(currentSession);
-      setLoading(false);
+        setSession(currentSession);
+      } catch (error) {
+        console.error("Session check failed:", error);
+
+        if (!mounted) return;
+
+        setSession(null);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     };
 
     checkSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (!mounted) return;
+    } = supabase.auth.onAuthStateChange(
+      (_event, currentSession) => {
+        if (!mounted) return;
 
-      setSession(currentSession);
-      setLoading(false);
-    });
+        setSession(currentSession);
+        setLoading(false);
+      }
+    );
 
     return () => {
       mounted = false;
@@ -134,7 +145,9 @@ function ProtectedRoute() {
       <Navigate
         to="/login"
         replace
-        state={{ from: location.pathname }}
+        state={{
+          from: location.pathname + location.search,
+        }}
       />
     );
   }
@@ -142,58 +155,115 @@ function ProtectedRoute() {
   return <Outlet />;
 }
 
+/* =========================================================
+   ADMIN PROTECTED ROUTES
+   ========================================================= */
+
 function AdminRoute() {
-  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
+  const verifyAdmin = async () => {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    const verifyAdmin = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setAllowed(false);
+        return;
+      }
 
-        if (!user) {
-          if (mounted) {
-            setAllowed(false);
-            setLoading(false);
-          }
-          return;
-        }
-
-        const { data: adminRecord, error } = await supabase
+      const { data: adminRecord, error: adminError } =
+        await supabase
           .from("admin_users")
           .select("user_id")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (error) {
-          console.error("Admin verification error:", error);
-        }
+      if (adminError) {
+        console.error(
+          "Admin verification error:",
+          adminError
+        );
+
+        setAllowed(false);
+        return;
+      }
+
+      setAllowed(Boolean(adminRecord));
+    } catch (error) {
+      console.error(
+        "Admin verification failed:",
+        error
+      );
+
+      setAllowed(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const runVerification = async () => {
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
         if (!mounted) return;
+
+        if (userError || !user) {
+          setAllowed(false);
+          setLoading(false);
+          return;
+        }
+
+        const { data: adminRecord, error: adminError } =
+          await supabase
+            .from("admin_users")
+            .select("user_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+        if (!mounted) return;
+
+        if (adminError) {
+          console.error(
+            "Admin verification error:",
+            adminError
+          );
+
+          setAllowed(false);
+          setLoading(false);
+          return;
+        }
 
         setAllowed(Boolean(adminRecord));
         setLoading(false);
       } catch (error) {
-        console.error("Admin verification failed:", error);
+        console.error(
+          "Admin verification failed:",
+          error
+        );
 
-        if (mounted) {
-          setAllowed(false);
-          setLoading(false);
-        }
+        if (!mounted) return;
+
+        setAllowed(false);
+        setLoading(false);
       }
     };
 
-    verifyAdmin();
+    runVerification();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      verifyAdmin();
+      runVerification();
     });
 
     return () => {
@@ -203,40 +273,82 @@ function AdminRoute() {
   }, []);
 
   if (loading) {
-    return <LoadingScreen message="Verifying admin access..." />;
+    return (
+      <LoadingScreen message="Verifying admin access..." />
+    );
   }
 
   if (!allowed) {
-    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/admin/login" replace />;
   }
 
   return <Outlet />;
 }
 
+/* =========================================================
+   APP
+   ========================================================= */
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        {/* Public */}
+        <Route
+          path="/"
+          element={<Navigate to="/dashboard" replace />}
+        />
 
         <Route path="/login" element={<Login />} />
+
         <Route path="/register" element={<Register />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
 
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
+
+        <Route
+          path="/admin/login"
+          element={<AdminLogin />}
+        />
+
+        {/* User protected routes */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/book" element={<Book />} />
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route
+            path="/dashboard"
+            element={<Dashboard />}
+          />
+
+          <Route
+            path="/book"
+            element={<Book />}
+          />
+
+          <Route
+            path="/bookings"
+            element={<Bookings />}
+          />
+
+          <Route
+            path="/profile"
+            element={<Profile />}
+          />
         </Route>
 
-        <Route path="/admin/login" element={<AdminLogin />} />
-
+        {/* Admin protected routes */}
         <Route element={<AdminRoute />}>
-          <Route path="/admin" element={<Admin />} />
+          <Route
+            path="/admin"
+            element={<Admin />}
+          />
         </Route>
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* Fallback */}
+        <Route
+          path="*"
+          element={<Navigate to="/dashboard" replace />}
+        />
       </Routes>
     </BrowserRouter>
   );
