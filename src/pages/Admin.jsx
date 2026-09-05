@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  Award,
   Bell,
   CalendarDays,
   Check,
@@ -8,6 +9,8 @@ import {
   Clock3,
   Edit3,
   Eye,
+  Gift,
+  History,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -15,13 +18,16 @@ import {
   Power,
   RefreshCw,
   ShieldCheck,
+  Star,
   Trash2,
   Trophy,
   UserRound,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
 import { supabase } from "../lib/supabase";
 import "./Admin.css";
 
@@ -31,11 +37,13 @@ const TABS = {
   SLOTS: "slots",
   BOOKINGS: "bookings",
   USERS: "users",
+  REWARDS: "rewards",
   ANNOUNCEMENTS: "announcements",
 };
 
 const getTodayString = () => {
   const date = new Date();
+
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -46,17 +54,21 @@ const getTodayString = () => {
 const formatDate = (value) => {
   if (!value) return "—";
 
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-BD", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return new Date(`${value}T00:00:00`).toLocaleDateString(
+    "en-BD",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }
+  );
 };
 
 const formatTime = (value) => {
   if (!value) return "—";
 
   const [hourString, minuteString] = value.split(":");
+
   const hour = Number(hourString);
   const minute = Number(minuteString);
 
@@ -88,13 +100,33 @@ const getInitialSlotForm = () => ({
   is_available: true,
 });
 
+const getInitialMilestoneForm = () => ({
+  title: "",
+  description: "",
+  points_required: "",
+  is_active: true,
+});
+
+const getInitialOfferForm = () => ({
+  title: "",
+  description: "",
+  required_points: "",
+  benefit: "",
+  discount_type: "percentage",
+  discount_value: "",
+  target_type: "community",
+  is_active: true,
+});
+
 function LoadingScreen() {
   return (
     <div className="admin-loading">
       <div className="admin-loading-icon">
         <ShieldCheck size={25} />
       </div>
+
       <strong>SPORTIVA ADMIN</strong>
+
       <p>Loading management console...</p>
     </div>
   );
@@ -110,12 +142,27 @@ function StatusBadge({ status }) {
   );
 }
 
+function MenuButton({ icon: Icon, label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`admin-nav ${active ? "active" : ""}`}
+      onClick={onClick}
+    >
+      <Icon size={16} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 function Admin() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(TABS.OVERVIEW);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
 
   const [turfs, setTurfs] = useState([]);
   const [slots, setSlots] = useState([]);
@@ -123,10 +170,13 @@ function Admin() {
   const [announcements, setAnnouncements] = useState([]);
   const [users, setUsers] = useState([]);
 
-  const [errorMessage, setErrorMessage] = useState("");
+  /* =========================================================
+     TURF STATE
+     ========================================================= */
 
   const [showTurfForm, setShowTurfForm] = useState(false);
   const [editingTurf, setEditingTurf] = useState(null);
+
   const [turfForm, setTurfForm] = useState({
     name: "",
     description: "",
@@ -135,6 +185,10 @@ function Admin() {
     is_active: true,
   });
 
+  /* =========================================================
+     SLOT STATE
+     ========================================================= */
+
   const [showSlotForm, setShowSlotForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
   const [slotForm, setSlotForm] = useState(getInitialSlotForm());
@@ -142,26 +196,98 @@ function Admin() {
   const [slotTurfFilter, setSlotTurfFilter] = useState("all");
   const [slotDateFilter, setSlotDateFilter] = useState("");
 
+  /* =========================================================
+     BOOKING STATE
+     ========================================================= */
+
   const [bookingSearch, setBookingSearch] = useState("");
-  const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
-  const [bookingTurfFilter, setBookingTurfFilter] = useState("all");
-  const [bookingDateFilter, setBookingDateFilter] = useState("");
+  const [bookingStatusFilter, setBookingStatusFilter] =
+    useState("all");
 
-  const [processingBookingId, setProcessingBookingId] = useState(null);
-  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [bookingTurfFilter, setBookingTurfFilter] =
+    useState("all");
 
-  const [adminEmail, setAdminEmail] = useState("");
+  const [bookingDateFilter, setBookingDateFilter] =
+    useState("");
 
-  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [processingBookingId, setProcessingBookingId] =
+    useState(null);
+
+  const [selectedBooking, setSelectedBooking] =
+    useState(null);
+
+  /* =========================================================
+     ANNOUNCEMENT STATE
+     ========================================================= */
+
+  const [showAnnouncementForm, setShowAnnouncementForm] =
+    useState(false);
+
   const [announcementForm, setAnnouncementForm] = useState({
     title: "",
     message: "",
     is_active: true,
   });
 
+  /* =========================================================
+     REWARD STATE
+     ========================================================= */
+
+  const [rewardMembers, setRewardMembers] = useState([]);
+  const [rewardTransactions, setRewardTransactions] =
+    useState([]);
+  const [rewardRedemptions, setRewardRedemptions] =
+    useState([]);
+  const [rewardCheckpoints, setRewardCheckpoints] =
+    useState([]);
+  const [rewardOffers, setRewardOffers] = useState([]);
+
+  const [rewardSubTab, setRewardSubTab] =
+    useState("overview");
+
+  const [rewardSearch, setRewardSearch] = useState("");
+
+  const [showMilestoneForm, setShowMilestoneForm] =
+    useState(false);
+
+  const [editingMilestone, setEditingMilestone] =
+    useState(null);
+
+  const [milestoneForm, setMilestoneForm] = useState(
+    getInitialMilestoneForm()
+  );
+
+  const [showOfferForm, setShowOfferForm] = useState(false);
+
+  const [editingOffer, setEditingOffer] =
+    useState(null);
+
+  const [offerForm, setOfferForm] = useState(
+    getInitialOfferForm()
+  );
+
+  const [showPointsForm, setShowPointsForm] =
+    useState(false);
+
+  const [selectedRewardMember, setSelectedRewardMember] =
+    useState(null);
+
+  const [pointsForm, setPointsForm] = useState({
+    points: "",
+    action: "add",
+    description: "",
+  });
+
+  /* =========================================================
+     HELPERS
+     ========================================================= */
+
   const getTurfName = useCallback(
     (turfId) => {
-      const turf = turfs.find((item) => String(item.id) === String(turfId));
+      const turf = turfs.find(
+        (item) => String(item.id) === String(turfId)
+      );
+
       return turf?.name || "Unknown Turf";
     },
     [turfs]
@@ -169,10 +295,17 @@ function Admin() {
 
   const getProfile = useCallback(
     (userId) => {
-      return users.find((item) => item.id === userId) || null;
+      return (
+        users.find((item) => item.id === userId) ||
+        null
+      );
     },
     [users]
   );
+
+  /* =========================================================
+     ADMIN AUTH
+     ========================================================= */
 
   const verifyAdmin = useCallback(async () => {
     const {
@@ -181,31 +314,40 @@ function Admin() {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      throw new Error("Your session has expired. Please sign in again.");
+      throw new Error(
+        "Your session has expired. Please sign in again."
+      );
     }
 
-    if (!user.email_confirmed_at) {
-      throw new Error("Your admin email is not verified.");
-    }
-
-    const { data: adminRecord, error: adminError } = await supabase
-      .from("admin_users")
-      .select("user_id, username")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const { data: adminRecord, error: adminError } =
+      await supabase
+        .from("admin_users")
+        .select("user_id, username")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
     if (adminError) {
       throw new Error(adminError.message);
     }
 
     if (!adminRecord) {
-      throw new Error("This account does not have admin access.");
+      throw new Error(
+        "This account does not have admin access."
+      );
     }
 
-    setAdminEmail(user.email || adminRecord.username || "Administrator");
+    setAdminEmail(
+      user.email ||
+        adminRecord.username ||
+        "Administrator"
+    );
 
     return user;
   }, []);
+
+  /* =========================================================
+     LOAD DATA
+     ========================================================= */
 
   const loadData = useCallback(async () => {
     const [
@@ -214,53 +356,183 @@ function Admin() {
       bookingsResult,
       announcementsResult,
       usersResult,
+      rewardsResult,
+      transactionsResult,
+      redemptionsResult,
+      checkpointsResult,
+      offersResult,
     ] = await Promise.all([
       supabase
         .from("turfs")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("created_at", {
+          ascending: false,
+        }),
 
       supabase
         .from("time_slots")
         .select("*")
-        .order("slot_date", { ascending: true })
-        .order("start_time", { ascending: true }),
+        .order("slot_date", {
+          ascending: true,
+        })
+        .order("start_time", {
+          ascending: true,
+        }),
 
       supabase
         .from("bookings")
         .select("*")
-        .order("booking_date", { ascending: false })
-        .order("start_time", { ascending: false }),
+        .order("booking_date", {
+          ascending: false,
+        })
+        .order("start_time", {
+          ascending: false,
+        }),
 
       supabase
         .from("announcements")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("created_at", {
+          ascending: false,
+        }),
 
       supabase
         .from("profiles")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("created_at", {
+          ascending: false,
+        }),
+
+      supabase
+        .from("member_rewards")
+        .select("*")
+        .order("points", {
+          ascending: false,
+        }),
+
+      supabase
+        .from("reward_transactions")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(100),
+
+      supabase
+        .from("reward_redemptions")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(100),
+
+      supabase
+        .from("reward_checkpoints")
+        .select("*")
+        .order("points_required", {
+          ascending: true,
+        }),
+
+      supabase
+        .from("community_offers")
+        .select("*")
+        .order("required_points", {
+          ascending: true,
+        }),
     ]);
 
-    if (turfsResult.error) throw new Error(turfsResult.error.message);
-    if (slotsResult.error) throw new Error(slotsResult.error.message);
-    if (bookingsResult.error) throw new Error(bookingsResult.error.message);
-    if (announcementsResult.error) {
-      throw new Error(announcementsResult.error.message);
+    if (turfsResult.error) {
+      throw new Error(turfsResult.error.message);
     }
-    if (usersResult.error) throw new Error(usersResult.error.message);
+
+    if (slotsResult.error) {
+      throw new Error(slotsResult.error.message);
+    }
+
+    if (bookingsResult.error) {
+      throw new Error(bookingsResult.error.message);
+    }
+
+    if (announcementsResult.error) {
+      throw new Error(
+        announcementsResult.error.message
+      );
+    }
+
+    if (usersResult.error) {
+      throw new Error(usersResult.error.message);
+    }
+
+    if (rewardsResult.error) {
+      console.error(
+        "Member rewards error:",
+        rewardsResult.error
+      );
+    }
+
+    if (transactionsResult.error) {
+      console.error(
+        "Reward transactions error:",
+        transactionsResult.error
+      );
+    }
+
+    if (redemptionsResult.error) {
+      console.error(
+        "Reward redemptions error:",
+        redemptionsResult.error
+      );
+    }
+
+    if (checkpointsResult.error) {
+      console.error(
+        "Reward checkpoints error:",
+        checkpointsResult.error
+      );
+    }
+
+    if (offersResult.error) {
+      console.error(
+        "Reward offers error:",
+        offersResult.error
+      );
+    }
 
     setTurfs(turfsResult.data || []);
     setSlots(slotsResult.data || []);
     setBookings(bookingsResult.data || []);
-    setAnnouncements(announcementsResult.data || []);
+    setAnnouncements(
+      announcementsResult.data || []
+    );
     setUsers(usersResult.data || []);
+
+    setRewardMembers(
+      rewardsResult.data || []
+    );
+
+    setRewardTransactions(
+      transactionsResult.data || []
+    );
+
+    setRewardRedemptions(
+      redemptionsResult.data || []
+    );
+
+    setRewardCheckpoints(
+      checkpointsResult.data || []
+    );
+
+    setRewardOffers(
+      offersResult.data || []
+    );
   }, []);
 
   const refreshData = useCallback(
     async (silent = false) => {
-      if (!silent) setRefreshing(true);
+      if (!silent) {
+        setRefreshing(true);
+      }
+
       setErrorMessage("");
 
       try {
@@ -268,7 +540,11 @@ function Admin() {
         await loadData();
       } catch (error) {
         console.error(error);
-        setErrorMessage(error.message || "Unable to load admin data.");
+
+        setErrorMessage(
+          error.message ||
+            "Unable to load admin data."
+        );
       } finally {
         setRefreshing(false);
         setLoading(false);
@@ -291,9 +567,7 @@ function Admin() {
           schema: "public",
           table: "bookings",
         },
-        () => {
-          refreshData(true);
-        }
+        () => refreshData(true)
       )
       .on(
         "postgres_changes",
@@ -302,9 +576,16 @@ function Admin() {
           schema: "public",
           table: "time_slots",
         },
-        () => {
-          refreshData(true);
-        }
+        () => refreshData(true)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "member_rewards",
+        },
+        () => refreshData(true)
       )
       .subscribe();
 
@@ -315,11 +596,19 @@ function Admin() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/admin/login", { replace: true });
+
+    navigate("/admin/login", {
+      replace: true,
+    });
   };
+
+  /* =========================================================
+     TURF MANAGEMENT
+     ========================================================= */
 
   const openAddTurfForm = () => {
     setEditingTurf(null);
+
     setTurfForm({
       name: "",
       description: "",
@@ -327,18 +616,22 @@ function Admin() {
       image_url: "",
       is_active: true,
     });
+
     setShowTurfForm(true);
   };
 
   const openEditTurfForm = (turf) => {
     setEditingTurf(turf);
+
     setTurfForm({
       name: turf.name || "",
       description: turf.description || "",
-      price_per_hour: turf.price_per_hour ?? "",
+      price_per_hour:
+        turf.price_per_hour ?? "",
       image_url: turf.image_url || "",
       is_active: turf.is_active ?? true,
     });
+
     setShowTurfForm(true);
   };
 
@@ -351,9 +644,15 @@ function Admin() {
     event.preventDefault();
 
     const name = turfForm.name.trim();
-    const description = turfForm.description.trim();
-    const price = Number(turfForm.price_per_hour);
-    const imageUrl = turfForm.image_url.trim();
+    const description =
+      turfForm.description.trim();
+
+    const price = Number(
+      turfForm.price_per_hour
+    );
+
+    const imageUrl =
+      turfForm.image_url.trim();
 
     if (!name) {
       alert("Please enter the turf name.");
@@ -361,34 +660,37 @@ function Admin() {
     }
 
     if (!Number.isFinite(price) || price <= 0) {
-      alert("Please enter a valid price per hour.");
+      alert("Please enter a valid price.");
       return;
     }
 
     try {
       setRefreshing(true);
 
+      const payload = {
+        name,
+        description,
+        price_per_hour: price,
+        image_url: imageUrl || null,
+        is_active: Boolean(
+          turfForm.is_active
+        ),
+      };
+
       if (editingTurf) {
         const { error } = await supabase
           .from("turfs")
-          .update({
-            name,
-            description,
-            price_per_hour: price,
-            image_url: imageUrl || null,
-            is_active: turfForm.is_active,
-          })
+          .update(payload)
           .eq("id", editingTurf.id);
 
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("turfs").insert({
-          name,
-          description,
-          price_per_hour: price,
-          image_url: imageUrl || null,
-          is_active: true,
-        });
+        const { error } = await supabase
+          .from("turfs")
+          .insert({
+            ...payload,
+            is_active: true,
+          });
 
         if (error) throw error;
       }
@@ -397,7 +699,11 @@ function Admin() {
       await loadData();
     } catch (error) {
       console.error(error);
-      alert(error.message || "Unable to save turf.");
+
+      alert(
+        error.message ||
+          "Unable to save turf."
+      );
     } finally {
       setRefreshing(false);
     }
@@ -409,7 +715,9 @@ function Admin() {
 
       const { error } = await supabase
         .from("turfs")
-        .update({ is_active: !turf.is_active })
+        .update({
+          is_active: !turf.is_active,
+        })
         .eq("id", turf.id);
 
       if (error) throw error;
@@ -417,7 +725,11 @@ function Admin() {
       await loadData();
     } catch (error) {
       console.error(error);
-      alert(error.message || "Unable to update turf.");
+
+      alert(
+        error.message ||
+          "Unable to update turf."
+      );
     } finally {
       setRefreshing(false);
     }
@@ -425,7 +737,7 @@ function Admin() {
 
   const deleteTurf = async (turf) => {
     const confirmed = window.confirm(
-      `Delete "${turf.name}"?\n\nThis should only be done when the turf is no longer needed.`
+      `Delete "${turf.name}"?`
     );
 
     if (!confirmed) return;
@@ -443,9 +755,10 @@ function Admin() {
       await loadData();
     } catch (error) {
       console.error(error);
+
       alert(
         error.message ||
-          "Unable to delete turf. Existing slots or bookings may reference it."
+          "Unable to delete turf."
       );
     } finally {
       setRefreshing(false);
@@ -453,15 +766,20 @@ function Admin() {
   };
 
   /* =========================================================
-     TIME SLOT MANAGEMENT
+     SLOT MANAGEMENT
      ========================================================= */
 
   const openAddSlotForm = () => {
+    const firstActiveTurf =
+      turfs.find(
+        (turf) => turf.is_active
+      );
+
     setEditingSlot(null);
 
     setSlotForm({
       turf_id:
-        turfs.find((turf) => turf.is_active)?.id?.toString() ||
+        firstActiveTurf?.id?.toString() ||
         turfs[0]?.id?.toString() ||
         "",
       slot_date: getTodayString(),
@@ -478,11 +796,17 @@ function Admin() {
     setEditingSlot(slot);
 
     setSlotForm({
-      turf_id: slot.turf_id?.toString() || "",
-      slot_date: slot.slot_date || getTodayString(),
-      start_time: slot.start_time?.slice(0, 5) || "",
-      end_time: slot.end_time?.slice(0, 5) || "",
-      is_available: slot.is_available ?? true,
+      turf_id:
+        slot.turf_id?.toString() || "",
+      slot_date:
+        slot.slot_date ||
+        getTodayString(),
+      start_time:
+        slot.start_time?.slice(0, 5) || "",
+      end_time:
+        slot.end_time?.slice(0, 5) || "",
+      is_available:
+        slot.is_available ?? true,
     });
 
     setShowSlotForm(true);
@@ -497,10 +821,18 @@ function Admin() {
   const handleSlotSubmit = async (event) => {
     event.preventDefault();
 
-    const turfId = Number(slotForm.turf_id);
-    const slotDate = slotForm.slot_date;
-    const startTime = slotForm.start_time;
-    const endTime = slotForm.end_time;
+    const turfId = Number(
+      slotForm.turf_id
+    );
+
+    const slotDate =
+      slotForm.slot_date;
+
+    const startTime =
+      slotForm.start_time;
+
+    const endTime =
+      slotForm.end_time;
 
     if (!Number.isInteger(turfId) || turfId <= 0) {
       alert("Please select a turf.");
@@ -513,17 +845,26 @@ function Admin() {
     }
 
     if (!startTime || !endTime) {
-      alert("Please enter both start and end time.");
+      alert(
+        "Please enter start and end time."
+      );
       return;
     }
 
     if (startTime >= endTime) {
-      alert("End time must be later than start time.");
+      alert(
+        "End time must be later than start time."
+      );
       return;
     }
 
-    if (!editingSlot && slotDate < getTodayString()) {
-      alert("You cannot create a time slot for a past date.");
+    if (
+      !editingSlot &&
+      slotDate < getTodayString()
+    ) {
+      alert(
+        "You cannot create a slot for a past date."
+      );
       return;
     }
 
@@ -535,24 +876,35 @@ function Admin() {
         slot_date: slotDate,
         start_time: startTime,
         end_time: endTime,
-        is_available: Boolean(slotForm.is_available),
+        is_available:
+          Boolean(
+            slotForm.is_available
+          ),
       };
 
       if (editingSlot) {
-        const { error } = await supabase
-          .from("time_slots")
-          .update(payload)
-          .eq("id", editingSlot.id);
+        const { error } =
+          await supabase
+            .from("time_slots")
+            .update(payload)
+            .eq("id", editingSlot.id);
 
         if (error) throw error;
 
-        alert("Time slot updated successfully.");
+        alert(
+          "Time slot updated successfully."
+        );
       } else {
-        const { error } = await supabase.from("time_slots").insert(payload);
+        const { error } =
+          await supabase
+            .from("time_slots")
+            .insert(payload);
 
         if (error) throw error;
 
-        alert("Time slot added successfully.");
+        alert(
+          "Time slot added successfully."
+        );
       }
 
       closeSlotForm();
@@ -560,18 +912,10 @@ function Admin() {
     } catch (error) {
       console.error(error);
 
-      const message = error.message || "";
-
-      if (
-        message.toLowerCase().includes("overlap") ||
-        message.toLowerCase().includes("time_slots")
-      ) {
-        alert(
-          `${message}\n\nMake sure this turf does not already have an overlapping slot on the same date.`
-        );
-      } else {
-        alert(message || "Unable to save time slot.");
-      }
+      alert(
+        error.message ||
+          "Unable to save time slot."
+      );
     } finally {
       setRefreshing(false);
     }
@@ -581,49 +925,62 @@ function Admin() {
     try {
       setRefreshing(true);
 
-      const { error } = await supabase
-        .from("time_slots")
-        .update({
-          is_available: !slot.is_available,
-        })
-        .eq("id", slot.id);
+      const { error } =
+        await supabase
+          .from("time_slots")
+          .update({
+            is_available:
+              !slot.is_available,
+          })
+          .eq("id", slot.id);
 
       if (error) throw error;
 
       await loadData();
     } catch (error) {
       console.error(error);
-      alert(error.message || "Unable to update time slot.");
+
+      alert(
+        error.message ||
+          "Unable to update time slot."
+      );
     } finally {
       setRefreshing(false);
     }
   };
 
   const deleteSlot = async (slot) => {
-    const confirmed = window.confirm(
-      `Delete the ${formatTime(slot.start_time)} - ${formatTime(
-        slot.end_time
-      )} slot on ${formatDate(slot.slot_date)}?`
-    );
+    const confirmed =
+      window.confirm(
+        `Delete ${formatTime(
+          slot.start_time
+        )} - ${formatTime(
+          slot.end_time
+        )} on ${formatDate(
+          slot.slot_date
+        )}?`
+      );
 
     if (!confirmed) return;
 
     try {
       setRefreshing(true);
 
-      const { error } = await supabase
-        .from("time_slots")
-        .delete()
-        .eq("id", slot.id);
+      const { error } =
+        await supabase
+          .from("time_slots")
+          .delete()
+          .eq("id", slot.id);
 
       if (error) throw error;
 
       await loadData();
     } catch (error) {
       console.error(error);
+
       alert(
         error.message ||
-          "Unable to delete this slot. It may already be referenced by a booking."
+          "Unable to delete slot."
       );
     } finally {
       setRefreshing(false);
@@ -634,266 +991,1131 @@ function Admin() {
     return slots.filter((slot) => {
       const matchesTurf =
         slotTurfFilter === "all" ||
-        String(slot.turf_id) === String(slotTurfFilter);
+        String(slot.turf_id) ===
+          String(slotTurfFilter);
 
       const matchesDate =
-        !slotDateFilter || slot.slot_date === slotDateFilter;
+        !slotDateFilter ||
+        slot.slot_date ===
+          slotDateFilter;
 
-      return matchesTurf && matchesDate;
+      return (
+        matchesTurf &&
+        matchesDate
+      );
     });
-  }, [slots, slotTurfFilter, slotDateFilter]);
+  }, [
+    slots,
+    slotTurfFilter,
+    slotDateFilter,
+  ]);
 
   /* =========================================================
      BOOKING MANAGEMENT
      ========================================================= */
 
   const filteredBookings = useMemo(() => {
-    const query = bookingSearch.trim().toLowerCase();
+    const query =
+      bookingSearch
+        .trim()
+        .toLowerCase();
 
-    return bookings.filter((booking) => {
-      const profile = getProfile(booking.user_id);
-      const turfName = getTurfName(booking.turf_id);
+    return bookings.filter(
+      (booking) => {
+        const profile =
+          getProfile(
+            booking.user_id
+          );
 
-      const matchesSearch =
-        !query ||
-        String(booking.id).includes(query) ||
-        String(booking.user_id || "").toLowerCase().includes(query) ||
-        String(profile?.full_name || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(profile?.phone || "")
-          .toLowerCase()
-          .includes(query) ||
-        turfName.toLowerCase().includes(query);
+        const turfName =
+          getTurfName(
+            booking.turf_id
+          );
 
-      const matchesStatus =
-        bookingStatusFilter === "all" ||
-        normalizeStatus(booking.status) === bookingStatusFilter;
+        const matchesSearch =
+          !query ||
+          String(
+            booking.id
+          ).includes(query) ||
+          String(
+            profile?.full_name ||
+              ""
+          )
+            .toLowerCase()
+            .includes(query) ||
+          String(
+            profile?.phone ||
+              ""
+          )
+            .toLowerCase()
+            .includes(query) ||
+          turfName
+            .toLowerCase()
+            .includes(query);
 
-      const matchesTurf =
-        bookingTurfFilter === "all" ||
-        String(booking.turf_id) === String(bookingTurfFilter);
+        const matchesStatus =
+          bookingStatusFilter ===
+            "all" ||
+          normalizeStatus(
+            booking.status
+          ) ===
+            bookingStatusFilter;
 
-      const matchesDate =
-        !bookingDateFilter || booking.booking_date === bookingDateFilter;
+        const matchesTurf =
+          bookingTurfFilter ===
+            "all" ||
+          String(
+            booking.turf_id
+          ) ===
+            String(
+              bookingTurfFilter
+            );
 
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesTurf &&
-        matchesDate
-      );
-    });
+        const matchesDate =
+          !bookingDateFilter ||
+          booking.booking_date ===
+            bookingDateFilter;
+
+        return (
+          matchesSearch &&
+          matchesStatus &&
+          matchesTurf &&
+          matchesDate
+        );
+      }
+    );
   }, [
-    bookingDateFilter,
     bookingSearch,
     bookingStatusFilter,
     bookingTurfFilter,
+    bookingDateFilter,
     bookings,
     getProfile,
     getTurfName,
   ]);
 
-  const updateBookingStatus = async (booking, status) => {
-    if (!booking?.id) return;
+  const updateBookingStatus = async (
+    booking,
+    status
+  ) => {
+    const action =
+      status === "confirmed"
+        ? "confirm"
+        : "cancel";
 
-    const actionLabel = status === "confirmed" ? "confirm" : "cancel";
-
-    const confirmed = window.confirm(
-      `Are you sure you want to ${actionLabel} booking #${booking.id}?`
-    );
+    const confirmed =
+      window.confirm(
+        `Are you sure you want to ${action} booking #${booking.id}?`
+      );
 
     if (!confirmed) return;
 
     try {
-      setProcessingBookingId(booking.id);
+      setProcessingBookingId(
+        booking.id
+      );
 
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status })
-        .eq("id", booking.id);
+      const { error } =
+        await supabase
+          .from("bookings")
+          .update({ status })
+          .eq("id", booking.id);
 
       if (error) throw error;
 
       await loadData();
 
-      setSelectedBooking((current) =>
-        current?.id === booking.id
-          ? { ...current, status }
-          : current
+      setSelectedBooking(
+        (current) =>
+          current?.id ===
+          booking.id
+            ? {
+                ...current,
+                status,
+              }
+            : current
       );
     } catch (error) {
       console.error(error);
-      alert(error.message || `Unable to ${actionLabel} booking.`);
+
+      alert(
+        error.message ||
+          `Unable to ${action} booking.`
+      );
     } finally {
-      setProcessingBookingId(null);
+      setProcessingBookingId(
+        null
+      );
     }
   };
 
   /* =========================================================
-     ANNOUNCEMENTS
+     ANNOUNCEMENT MANAGEMENT
      ========================================================= */
 
-  const toggleAnnouncement = async (announcement) => {
-    try {
-      setRefreshing(true);
+  const toggleAnnouncement =
+    async (announcement) => {
+      try {
+        setRefreshing(true);
 
-      const { error } = await supabase
-        .from("announcements")
-        .update({
-          is_active: !announcement.is_active,
-        })
-        .eq("id", announcement.id);
+        const { error } =
+          await supabase
+            .from("announcements")
+            .update({
+              is_active:
+                !announcement.is_active,
+            })
+            .eq(
+              "id",
+              announcement.id
+            );
 
-      if (error) throw error;
+        if (error) throw error;
 
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Unable to update announcement.");
-    } finally {
-      setRefreshing(false);
-    }
-  };
+        await loadData();
+      } catch (error) {
+        console.error(error);
 
-  const deleteAnnouncement = async (announcement) => {
-    const confirmed = window.confirm(
-      `Delete "${announcement.title}"?`
+        alert(
+          error.message ||
+            "Unable to update announcement."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  const deleteAnnouncement =
+    async (announcement) => {
+      const confirmed =
+        window.confirm(
+          `Delete "${announcement.title}"?`
+        );
+
+      if (!confirmed) return;
+
+      try {
+        setRefreshing(true);
+
+        const { error } =
+          await supabase
+            .from("announcements")
+            .delete()
+            .eq(
+              "id",
+              announcement.id
+            );
+
+        if (error) throw error;
+
+        await loadData();
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to delete announcement."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  const createAnnouncement =
+    async (event) => {
+      event.preventDefault();
+
+      const title =
+        announcementForm.title.trim();
+
+      const message =
+        announcementForm.message.trim();
+
+      if (!title || !message) {
+        alert(
+          "Please enter a title and message."
+        );
+        return;
+      }
+
+      try {
+        setRefreshing(true);
+
+        const { error } =
+          await supabase
+            .from("announcements")
+            .insert({
+              title,
+              message,
+              is_active:
+                Boolean(
+                  announcementForm.is_active
+                ),
+            });
+
+        if (error) throw error;
+
+        setAnnouncementForm({
+          title: "",
+          message: "",
+          is_active: true,
+        });
+
+        setShowAnnouncementForm(false);
+
+        await loadData();
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to create announcement."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  /* =========================================================
+     REWARDS HELPERS
+     ========================================================= */
+
+  const getMemberProfile = useCallback(
+    (userId) => {
+      return (
+        users.find(
+          (user) =>
+            user.id === userId
+        ) || null
+      );
+    },
+    [users]
+  );
+
+  const getMemberStatus = useCallback(
+    (points) => {
+      const reached =
+        rewardCheckpoints.filter(
+          (checkpoint) =>
+            Number(
+              checkpoint.points_required ||
+                0
+            ) <=
+            Number(points || 0)
+        );
+
+      if (!reached.length) {
+        return "Starter";
+      }
+
+      return (
+        reached[reached.length - 1]
+          ?.title || "Starter"
+      );
+    },
+    [rewardCheckpoints]
+  );
+
+  const getNextCheckpoint =
+    useCallback(
+      (points) => {
+        return (
+          rewardCheckpoints.find(
+            (checkpoint) =>
+              Number(
+                checkpoint.points_required ||
+                  0
+              ) >
+              Number(points || 0)
+          ) || null
+        );
+      },
+      [rewardCheckpoints]
     );
 
-    if (!confirmed) return;
+  const filteredRewardMembers =
+    useMemo(() => {
+      const query =
+        rewardSearch
+          .trim()
+          .toLowerCase();
 
-    try {
-      setRefreshing(true);
+      return rewardMembers.filter(
+        (member) => {
+          const profile =
+            getMemberProfile(
+              member.user_id
+            );
 
-      const { error } = await supabase
-        .from("announcements")
-        .delete()
-        .eq("id", announcement.id);
+          return (
+            !query ||
+            String(
+              member.user_id || ""
+            )
+              .toLowerCase()
+              .includes(query) ||
+            String(
+              profile?.full_name ||
+                ""
+            )
+              .toLowerCase()
+              .includes(query) ||
+            String(
+              profile?.email ||
+                ""
+            )
+              .toLowerCase()
+              .includes(query) ||
+            String(
+              profile?.phone ||
+                ""
+            )
+              .toLowerCase()
+              .includes(query)
+          );
+        }
+      );
+    }, [
+      rewardMembers,
+      rewardSearch,
+      getMemberProfile,
+    ]);
 
-      if (error) throw error;
+  const rewardStats =
+    useMemo(() => {
+      const totalMembers =
+        rewardMembers.length;
 
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Unable to delete announcement.");
-    } finally {
-      setRefreshing(false);
-    }
+      const totalPoints =
+        rewardMembers.reduce(
+          (sum, member) =>
+            sum +
+            Number(
+              member.points || 0
+            ),
+          0
+        );
+
+      const lifetimePoints =
+        rewardMembers.reduce(
+          (sum, member) =>
+            sum +
+            Number(
+              member.lifetime_points ||
+                0
+            ),
+          0
+        );
+
+      const unlockedOffers =
+        rewardMembers.reduce(
+          (sum, member) => {
+            const count =
+              rewardOffers.filter(
+                (offer) =>
+                  member.points >=
+                  Number(
+                    offer.required_points ||
+                      0
+                  )
+              ).length;
+
+            return sum + count;
+          },
+          0
+        );
+
+      return {
+        totalMembers,
+        totalPoints,
+        lifetimePoints,
+        unlockedOffers,
+      };
+    }, [
+      rewardMembers,
+      rewardOffers,
+    ]);
+
+  /* =========================================================
+     MANUAL POINTS MANAGEMENT
+     ========================================================= */
+
+  const openPointsForm = (
+    member
+  ) => {
+    setSelectedRewardMember(
+      member
+    );
+
+    setPointsForm({
+      points: "",
+      action: "add",
+      description: "",
+    });
+
+    setShowPointsForm(true);
   };
 
-  const createAnnouncement = async (event) => {
+  const closePointsForm = () => {
+    setShowPointsForm(false);
+    setSelectedRewardMember(null);
+  };
+
+  const handlePointsSubmit =
+    async (event) => {
+      event.preventDefault();
+
+      if (!selectedRewardMember) {
+        return;
+      }
+
+      const amount = Number(
+        pointsForm.points
+      );
+
+      if (
+        !Number.isInteger(amount) ||
+        amount <= 0
+      ) {
+        alert(
+          "Enter a positive whole number of points."
+        );
+        return;
+      }
+
+      const currentPoints =
+        Number(
+          selectedRewardMember.points ||
+            0
+        );
+
+      let newPoints =
+        pointsForm.action === "add"
+          ? currentPoints + amount
+          : currentPoints - amount;
+
+      if (newPoints < 0) {
+        alert(
+          "A member cannot have negative points."
+        );
+        return;
+      }
+
+      const lifetime =
+        Number(
+          selectedRewardMember.lifetime_points ||
+            0
+        );
+
+      const newLifetime =
+        pointsForm.action === "add"
+          ? lifetime + amount
+          : lifetime;
+
+      const description =
+        pointsForm.description.trim() ||
+        (pointsForm.action === "add"
+          ? "Points manually added by admin"
+          : "Points manually removed by admin");
+
+      try {
+        setRefreshing(true);
+
+        const { error: rewardError } =
+          await supabase
+            .from("member_rewards")
+            .update({
+              points: newPoints,
+              lifetime_points:
+                newLifetime,
+              updated_at:
+                new Date().toISOString(),
+            })
+            .eq(
+              "user_id",
+              selectedRewardMember.user_id
+            );
+
+        if (rewardError) {
+          throw rewardError;
+        }
+
+        const transactionPoints =
+          pointsForm.action === "add"
+            ? amount
+            : -amount;
+
+        const {
+          error: transactionError,
+        } = await supabase
+          .from("reward_transactions")
+          .insert({
+            user_id:
+              selectedRewardMember.user_id,
+            points:
+              transactionPoints,
+            type:
+              pointsForm.action ===
+              "add"
+                ? "admin_adjustment"
+                : "admin_deduction",
+            description,
+          });
+
+        if (transactionError) {
+          console.error(
+            "Transaction log error:",
+            transactionError
+          );
+        }
+
+        closePointsForm();
+
+        await loadData();
+
+        alert(
+          pointsForm.action ===
+            "add"
+            ? "Points added successfully."
+            : "Points removed successfully."
+        );
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to update member points."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  /* =========================================================
+     MILESTONE MANAGEMENT
+     ========================================================= */
+
+  const openAddMilestone =
+    () => {
+      setEditingMilestone(null);
+
+      setMilestoneForm(
+        getInitialMilestoneForm()
+      );
+
+      setShowMilestoneForm(true);
+    };
+
+  const openEditMilestone =
+    (milestone) => {
+      setEditingMilestone(
+        milestone
+      );
+
+      setMilestoneForm({
+        title:
+          milestone.title || "",
+        description:
+          milestone.description ||
+          "",
+        points_required:
+          milestone.points_required ??
+          "",
+        is_active:
+          milestone.is_active ??
+          true,
+      });
+
+      setShowMilestoneForm(true);
+    };
+
+  const closeMilestoneForm =
+    () => {
+      setShowMilestoneForm(false);
+      setEditingMilestone(null);
+    };
+
+  const saveMilestone =
+    async (event) => {
+      event.preventDefault();
+
+      const title =
+        milestoneForm.title.trim();
+
+      const description =
+        milestoneForm.description.trim();
+
+      const pointsRequired =
+        Number(
+          milestoneForm.points_required
+        );
+
+      if (!title) {
+        alert(
+          "Please enter a milestone title."
+        );
+        return;
+      }
+
+      if (
+        !Number.isInteger(
+          pointsRequired
+        ) ||
+        pointsRequired < 0
+      ) {
+        alert(
+          "Enter a valid points requirement."
+        );
+        return;
+      }
+
+      try {
+        setRefreshing(true);
+
+        const payload = {
+          title,
+          description:
+            description || null,
+          points_required:
+            pointsRequired,
+          is_active:
+            Boolean(
+              milestoneForm.is_active
+            ),
+        };
+
+        if (editingMilestone) {
+          const { error } =
+            await supabase
+              .from(
+                "reward_checkpoints"
+              )
+              .update(payload)
+              .eq(
+                "id",
+                editingMilestone.id
+              );
+
+          if (error) throw error;
+        } else {
+          const { error } =
+            await supabase
+              .from(
+                "reward_checkpoints"
+              )
+              .insert(payload);
+
+          if (error) throw error;
+        }
+
+        closeMilestoneForm();
+        await loadData();
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to save milestone."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  const toggleMilestone =
+    async (milestone) => {
+      try {
+        setRefreshing(true);
+
+        const { error } =
+          await supabase
+            .from(
+              "reward_checkpoints"
+            )
+            .update({
+              is_active:
+                !milestone.is_active,
+            })
+            .eq(
+              "id",
+              milestone.id
+            );
+
+        if (error) throw error;
+
+        await loadData();
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to update milestone."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  const deleteMilestone =
+    async (milestone) => {
+      const confirmed =
+        window.confirm(
+          `Delete "${milestone.title}"?`
+        );
+
+      if (!confirmed) return;
+
+      try {
+        setRefreshing(true);
+
+        const { error } =
+          await supabase
+            .from(
+              "reward_checkpoints"
+            )
+            .delete()
+            .eq(
+              "id",
+              milestone.id
+            );
+
+        if (error) throw error;
+
+        await loadData();
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to delete milestone."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  /* =========================================================
+     OFFER MANAGEMENT
+     ========================================================= */
+
+  const openAddOffer = () => {
+    setEditingOffer(null);
+
+    setOfferForm(
+      getInitialOfferForm()
+    );
+
+    setShowOfferForm(true);
+  };
+
+  const openEditOffer =
+    (offer) => {
+      setEditingOffer(offer);
+
+      setOfferForm({
+        title:
+          offer.title || "",
+        description:
+          offer.description || "",
+        required_points:
+          offer.required_points ??
+          "",
+        benefit:
+          offer.benefit || "",
+        discount_type:
+          offer.discount_type ||
+          "percentage",
+        discount_value:
+          offer.discount_value ??
+          "",
+        target_type:
+          offer.target_type ||
+          "community",
+        is_active:
+          offer.is_active ??
+          true,
+      });
+
+      setShowOfferForm(true);
+    };
+
+  const closeOfferForm =
+    () => {
+      setShowOfferForm(false);
+      setEditingOffer(null);
+    };
+
+  const saveOffer = async (
+    event
+  ) => {
     event.preventDefault();
 
-    const title = announcementForm.title.trim();
-    const message = announcementForm.message.trim();
+    const title =
+      offerForm.title.trim();
 
-    if (!title || !message) {
-      alert("Please enter both a title and a message.");
+    const description =
+      offerForm.description.trim();
+
+    const benefit =
+      offerForm.benefit.trim();
+
+    const requiredPoints =
+      Number(
+        offerForm.required_points
+      );
+
+    const discountValue =
+      Number(
+        offerForm.discount_value
+      );
+
+    if (!title) {
+      alert(
+        "Please enter a reward title."
+      );
+      return;
+    }
+
+    if (!description) {
+      alert(
+        "Please enter a description."
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(
+        requiredPoints
+      ) ||
+      requiredPoints < 0
+    ) {
+      alert(
+        "Enter a valid points requirement."
+      );
+      return;
+    }
+
+    if (!benefit) {
+      alert(
+        "Please describe the reward benefit."
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(
+        discountValue
+      ) ||
+      discountValue < 0
+    ) {
+      alert(
+        "Enter a valid discount value."
+      );
+      return;
+    }
+
+    if (
+      offerForm.discount_type ===
+        "percentage" &&
+      discountValue > 100
+    ) {
+      alert(
+        "Percentage discount cannot exceed 100."
+      );
       return;
     }
 
     try {
       setRefreshing(true);
 
-      const { error } = await supabase.from("announcements").insert({
+      const payload = {
         title,
-        message,
-        is_active: Boolean(announcementForm.is_active),
-      });
+        description,
+        required_points:
+          requiredPoints,
+        benefit,
+        discount_percent:
+          offerForm.discount_type ===
+          "percentage"
+            ? discountValue
+            : 0,
+        is_active:
+          Boolean(
+            offerForm.is_active
+          ),
+        target_type:
+          offerForm.target_type ||
+          "community",
+        discount_type:
+          offerForm.discount_type,
+        discount_value:
+          discountValue,
+      };
 
-      if (error) throw error;
+      if (editingOffer) {
+        const { error } =
+          await supabase
+            .from(
+              "community_offers"
+            )
+            .update(payload)
+            .eq(
+              "id",
+              editingOffer.id
+            );
 
-      setAnnouncementForm({
-        title: "",
-        message: "",
-        is_active: true,
-      });
+        if (error) throw error;
+      } else {
+        const { error } =
+          await supabase
+            .from(
+              "community_offers"
+            )
+            .insert(payload);
 
-      setShowAnnouncementForm(false);
+        if (error) throw error;
+      }
+
+      closeOfferForm();
       await loadData();
     } catch (error) {
       console.error(error);
-      alert(error.message || "Unable to create announcement.");
+
+      alert(
+        error.message ||
+          "Unable to save reward offer."
+      );
     } finally {
       setRefreshing(false);
     }
   };
 
-  /* =========================================================
-     STATS
-     ========================================================= */
+  const toggleOffer =
+    async (offer) => {
+      try {
+        setRefreshing(true);
 
-  const stats = useMemo(() => {
-    const confirmed = bookings.filter(
-      (booking) => normalizeStatus(booking.status) === "confirmed"
-    ).length;
+        const { error } =
+          await supabase
+            .from(
+              "community_offers"
+            )
+            .update({
+              is_active:
+                !offer.is_active,
+            })
+            .eq(
+              "id",
+              offer.id
+            );
 
-    const pending = bookings.filter(
-      (booking) => normalizeStatus(booking.status) === "pending"
-    ).length;
+        if (error) throw error;
 
-    const cancelled = bookings.filter(
-      (booking) => normalizeStatus(booking.status) === "cancelled"
-    ).length;
+        await loadData();
+      } catch (error) {
+        console.error(error);
 
-    const revenue = bookings
+        alert(
+          error.message ||
+            "Unable to update reward."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  const deleteOffer =
+    async (offer) => {
+      const confirmed =
+        window.confirm(
+          `Delete "${offer.title}"?`
+        );
+
+      if (!confirmed) return;
+
+      try {
+        setRefreshing(true);
+
+        const { error } =
+          await supabase
+            .from(
+              "community_offers"
+            )
+            .delete()
+            .eq(
+              "id",
+              offer.id
+            );
+
+        if (error) throw error;
+
+        await loadData();
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          error.message ||
+            "Unable to delete reward."
+        );
+      } finally {
+        setRefreshing(false);
+      }
+    };
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  const stats = {
+    confirmed: bookings.filter(
+      (booking) =>
+        normalizeStatus(
+          booking.status
+        ) === "confirmed"
+    ).length,
+
+    pending: bookings.filter(
+      (booking) =>
+        normalizeStatus(
+          booking.status
+        ) === "pending"
+    ).length,
+
+    cancelled: bookings.filter(
+      (booking) =>
+        normalizeStatus(
+          booking.status
+        ) === "cancelled"
+    ).length,
+
+    revenue: bookings
       .filter(
         (booking) =>
-          normalizeStatus(booking.status) === "confirmed"
+          normalizeStatus(
+            booking.status
+          ) === "confirmed"
       )
       .reduce(
-        (sum, booking) => sum + Number(booking.total_amount || 0),
+        (sum, booking) =>
+          sum +
+          Number(
+            booking.total_amount ||
+              0
+          ),
         0
-      );
+      ),
 
-    const activeTurfs = turfs.filter((turf) => turf.is_active).length;
+    activeTurfs:
+      turfs.filter(
+        (turf) => turf.is_active
+      ).length,
 
-    const availableSlots = slots.filter(
-      (slot) => slot.is_available
-    ).length;
-
-    return {
-      confirmed,
-      pending,
-      cancelled,
-      revenue,
-      activeTurfs,
-      availableSlots,
-    };
-  }, [bookings, slots, turfs]);
-
-  const sortedUpcomingBookings = useMemo(() => {
-    const today = getTodayString();
-
-    return bookings
-      .filter((booking) => {
-        const status = normalizeStatus(booking.status);
-
-        return (
-          status !== "cancelled" &&
-          booking.booking_date >= today
-        );
-      })
-      .sort((a, b) => {
-        const aKey = `${a.booking_date} ${a.start_time}`;
-        const bKey = `${b.booking_date} ${b.start_time}`;
-
-        return aKey.localeCompare(bKey);
-      })
-      .slice(0, 6);
-  }, [bookings]);
-
-  const latestBookings = useMemo(() => {
-    return [...bookings]
-      .sort((a, b) => {
-        const aKey = `${a.booking_date || ""} ${a.start_time || ""}`;
-        const bKey = `${b.booking_date || ""} ${b.start_time || ""}`;
-
-        return bKey.localeCompare(aKey);
-      })
-      .slice(0, 8);
-  }, [bookings]);
+    availableSlots:
+      slots.filter(
+        (slot) =>
+          slot.is_available
+      ).length,
+  };
 
   const navItems = [
     {
@@ -922,15 +2144,16 @@ function Admin() {
       icon: Users,
     },
     {
+      id: TABS.REWARDS,
+      label: "Rewards",
+      icon: Award,
+    },
+    {
       id: TABS.ANNOUNCEMENTS,
       label: "Announcements",
       icon: Megaphone,
     },
   ];
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
 
   return (
     <div className="admin-layout">
@@ -938,53 +2161,69 @@ function Admin() {
         <div className="admin-sidebar-top">
           <div className="admin-sidebar-logo">
             SPORT<span>IVA</span>
-            <small>ADMIN CONTROL</small>
+
+            <small>
+              ADMIN CONTROL
+            </small>
           </div>
 
           <div className="admin-sidebar-divider" />
 
           <nav>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <button
-                  key={item.id}
-                  className={`admin-nav ${
-                    activeTab === item.id ? "active" : ""
-                  }`}
-                  onClick={() => setActiveTab(item.id)}
-                  type="button"
-                >
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+            {navItems.map((item) => (
+              <MenuButton
+                key={item.id}
+                icon={item.icon}
+                label={item.label}
+                active={
+                  activeTab ===
+                  item.id
+                }
+                onClick={() =>
+                  setActiveTab(
+                    item.id
+                  )
+                }
+              />
+            ))}
           </nav>
         </div>
 
         <div className="admin-sidebar-bottom">
           <button
-            className="admin-refresh"
-            onClick={() => refreshData()}
-            disabled={refreshing}
             type="button"
+            className="admin-refresh"
+            onClick={() =>
+              refreshData()
+            }
+            disabled={refreshing}
           >
             <RefreshCw
               size={15}
-              className={refreshing ? "admin-spin" : ""}
+              className={
+                refreshing
+                  ? "admin-spin"
+                  : ""
+              }
             />
-            <span>{refreshing ? "Refreshing..." : "Refresh Data"}</span>
+
+            <span>
+              {refreshing
+                ? "Refreshing..."
+                : "Refresh Data"}
+            </span>
           </button>
 
           <button
+            type="button"
             className="admin-logout"
             onClick={handleLogout}
-            type="button"
           >
             <LogOut size={15} />
-            <span>Sign Out</span>
+
+            <span>
+              Sign Out
+            </span>
           </button>
 
           <div className="admin-sidebar-footer">
@@ -1002,8 +2241,13 @@ function Admin() {
             </div>
 
             <h1>
-              {navItems.find((item) => item.id === activeTab)?.label ||
-                "Admin Dashboard"}
+              {
+                navItems.find(
+                  (item) =>
+                    item.id ===
+                    activeTab
+                )?.label
+              }
             </h1>
           </div>
 
@@ -1015,7 +2259,10 @@ function Admin() {
 
             <div className="admin-user-badge">
               <UserRound size={15} />
-              <span>{adminEmail || "Administrator"}</span>
+              <span>
+                {adminEmail ||
+                  "Administrator"}
+              </span>
             </div>
           </div>
         </header>
@@ -1025,11 +2272,15 @@ function Admin() {
             <div
               style={{
                 marginBottom: 18,
-                padding: "12px 15px",
+                padding:
+                  "12px 15px",
                 borderRadius: 10,
-                border: "1px solid #f1c8c8",
-                background: "#fff5f5",
-                color: "#a04444",
+                border:
+                  "1px solid #f1c8c8",
+                background:
+                  "#fff5f5",
+                color:
+                  "#a04444",
                 fontSize: 11,
                 fontWeight: 700,
               }}
@@ -1038,7 +2289,12 @@ function Admin() {
             </div>
           )}
 
-          {activeTab === TABS.OVERVIEW && (
+          {/* =================================================
+              OVERVIEW
+              ================================================= */}
+
+          {activeTab ===
+            TABS.OVERVIEW && (
             <>
               <section className="admin-welcome">
                 <div>
@@ -1047,67 +2303,131 @@ function Admin() {
                   </div>
 
                   <h2>
-                    Welcome back to <span>Sportiva.</span>
+                    Welcome back to{" "}
+                    <span>
+                      Sportiva.
+                    </span>
                   </h2>
 
                   <p>
-                    Manage turfs, time slots, customer bookings,
-                    announcements and facility operations from one
-                    place.
+                    Manage turfs,
+                    schedules,
+                    bookings,
+                    members,
+                    rewards and
+                    customer
+                    communication.
                   </p>
                 </div>
 
                 <div className="admin-welcome-icon">
-                  <Activity size={29} />
+                  <Activity
+                    size={29}
+                  />
                 </div>
               </section>
 
               <section className="admin-stats">
                 <div className="admin-stat">
                   <div className="admin-stat-icon">
-                    <CalendarDays size={19} />
+                    <CalendarDays
+                      size={19}
+                    />
                   </div>
 
                   <div className="admin-stat-info">
-                    <span>CONFIRMED BOOKINGS</span>
-                    <strong>{stats.confirmed}</strong>
-                    <small>Approved reservations</small>
+                    <span>
+                      CONFIRMED BOOKINGS
+                    </span>
+
+                    <strong>
+                      {
+                        stats.confirmed
+                      }
+                    </strong>
+
+                    <small>
+                      Approved
+                      reservations
+                    </small>
                   </div>
                 </div>
 
                 <div className="admin-stat">
                   <div className="admin-stat-icon">
-                    <Clock3 size={19} />
+                    <Clock3
+                      size={19}
+                    />
                   </div>
 
                   <div className="admin-stat-info">
-                    <span>PENDING BOOKINGS</span>
-                    <strong>{stats.pending}</strong>
-                    <small>Waiting for approval</small>
+                    <span>
+                      PENDING BOOKINGS
+                    </span>
+
+                    <strong>
+                      {
+                        stats.pending
+                      }
+                    </strong>
+
+                    <small>
+                      Waiting for
+                      approval
+                    </small>
                   </div>
                 </div>
 
                 <div className="admin-stat">
                   <div className="admin-stat-icon">
-                    <Trophy size={19} />
+                    <Trophy
+                      size={19}
+                    />
                   </div>
 
                   <div className="admin-stat-info">
-                    <span>ACTIVE TURFS</span>
-                    <strong>{stats.activeTurfs}</strong>
-                    <small>{turfs.length} total turfs</small>
+                    <span>
+                      ACTIVE TURFS
+                    </span>
+
+                    <strong>
+                      {
+                        stats.activeTurfs
+                      }
+                    </strong>
+
+                    <small>
+                      {
+                        turfs.length
+                      }{" "}
+                      total
+                      turfs
+                    </small>
                   </div>
                 </div>
 
                 <div className="admin-stat">
                   <div className="admin-stat-icon">
-                    <Activity size={19} />
+                    <Award
+                      size={19}
+                    />
                   </div>
 
                   <div className="admin-stat-info">
-                    <span>CONFIRMED REVENUE</span>
-                    <strong>{formatMoney(stats.revenue)}</strong>
-                    <small>From confirmed bookings</small>
+                    <span>
+                      REWARD POINTS
+                    </span>
+
+                    <strong>
+                      {rewardStats.totalPoints.toLocaleString()}
+                    </strong>
+
+                    <small>
+                      {
+                        rewardStats.totalMembers
+                      }{" "}
+                      members
+                    </small>
                   </div>
                 </div>
               </section>
@@ -1119,28 +2439,55 @@ function Admin() {
                       <div className="admin-section-kicker">
                         RECENT ACTIVITY
                       </div>
-                      <h2>Latest Bookings</h2>
-                      <p>Most recent reservation activity.</p>
+
+                      <h2>
+                        Latest
+                        Bookings
+                      </h2>
+
+                      <p>
+                        Most recent
+                        reservation
+                        activity.
+                      </p>
                     </div>
 
                     <button
                       type="button"
                       className="admin-small-button"
-                      onClick={() => setActiveTab(TABS.BOOKINGS)}
+                      onClick={() =>
+                        setActiveTab(
+                          TABS.BOOKINGS
+                        )
+                      }
                     >
                       View all
-                      <ChevronRight size={13} />
+                      <ChevronRight
+                        size={13}
+                      />
                     </button>
                   </div>
 
-                  {latestBookings.length === 0 ? (
+                  {bookings.length ===
+                  0 ? (
                     <div className="admin-empty">
                       <div className="admin-empty-icon">
-                        <CalendarDays size={23} />
+                        <CalendarDays
+                          size={23}
+                        />
                       </div>
-                      <h3>No bookings yet</h3>
+
+                      <h3>
+                        No bookings
+                        yet
+                      </h3>
+
                       <p>
-                        New customer reservations will appear here.
+                        New
+                        reservations
+                        will
+                        appear
+                        here.
                       </p>
                     </div>
                   ) : (
@@ -1148,74 +2495,107 @@ function Admin() {
                       <table className="admin-table">
                         <thead>
                           <tr>
-                            <th>ID</th>
-                            <th>Customer</th>
-                            <th>Turf</th>
-                            <th>Date</th>
-                            <th>Time</th>
-                            <th>Amount</th>
-                            <th>Status</th>
+                            <th>
+                              ID
+                            </th>
+                            <th>
+                              Customer
+                            </th>
+                            <th>
+                              Turf
+                            </th>
+                            <th>
+                              Date
+                            </th>
+                            <th>
+                              Amount
+                            </th>
+                            <th>
+                              Status
+                            </th>
                           </tr>
                         </thead>
 
                         <tbody>
-                          {latestBookings.map((booking) => {
-                            const profile = getProfile(booking.user_id);
+                          {bookings
+                            .slice(
+                              0,
+                              8
+                            )
+                            .map(
+                              (
+                                booking
+                              ) => {
+                                const profile =
+                                  getProfile(
+                                    booking.user_id
+                                  );
 
-                            return (
-                              <tr key={booking.id}>
-                                <td>
-                                  <span className="table-id">
-                                    #{booking.id}
-                                  </span>
-                                </td>
+                                return (
+                                  <tr
+                                    key={
+                                      booking.id
+                                    }
+                                  >
+                                    <td>
+                                      <span className="table-id">
+                                        #
+                                        {
+                                          booking.id
+                                        }
+                                      </span>
+                                    </td>
 
-                                <td>
-                                  <div className="table-user">
-                                    <div className="table-avatar">
-                                      <UserRound size={13} />
-                                    </div>
-                                    <strong>
-                                      {profile?.full_name ||
-                                        "Unknown User"}
-                                    </strong>
-                                  </div>
-                                </td>
+                                    <td>
+                                      <div className="table-user">
+                                        <div className="table-avatar">
+                                          <UserRound
+                                            size={
+                                              13
+                                            }
+                                          />
+                                        </div>
 
-                                <td>
-                                  <span className="table-primary">
-                                    {getTurfName(booking.turf_id)}
-                                  </span>
-                                </td>
+                                        <strong>
+                                          {profile?.full_name ||
+                                            "Unknown"}
+                                        </strong>
+                                      </div>
+                                    </td>
 
-                                <td>{formatDate(booking.booking_date)}</td>
+                                    <td>
+                                      <span className="table-primary">
+                                        {getTurfName(
+                                          booking.turf_id
+                                        )}
+                                      </span>
+                                    </td>
 
-                                <td>
-                                  <div className="table-time">
-                                    <span>
-                                      {formatTime(booking.start_time)}
-                                    </span>
-                                    <ChevronRight size={11} />
-                                    <span>
-                                      {formatTime(booking.end_time)}
-                                    </span>
-                                  </div>
-                                </td>
+                                    <td>
+                                      {formatDate(
+                                        booking.booking_date
+                                      )}
+                                    </td>
 
-                                <td>
-                                  <span className="table-amount">
-                                    {formatMoney(booking.total_amount)}
-                                  </span>
-                                </td>
+                                    <td>
+                                      <span className="table-amount">
+                                        {formatMoney(
+                                          booking.total_amount
+                                        )}
+                                      </span>
+                                    </td>
 
-                                <td>
-                                  <StatusBadge
-                                    status={booking.status}
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                    <td>
+                                      <StatusBadge
+                                        status={
+                                          booking.status
+                                        }
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                            )}
                         </tbody>
                       </table>
                     </div>
@@ -1226,117 +2606,152 @@ function Admin() {
                   <div className="admin-mini-panel">
                     <div className="admin-mini-heading">
                       <div className="admin-mini-icon">
-                        <Activity size={17} />
+                        <Award
+                          size={17}
+                        />
                       </div>
 
                       <div>
-                        <span>BOOKING STATUS</span>
-                        <strong>Current Overview</strong>
+                        <span>
+                          REWARDS
+                        </span>
+
+                        <strong>
+                          Membership
+                        </strong>
                       </div>
                     </div>
 
                     <div className="admin-status-row">
                       <span>
                         <i className="dot confirmed-dot" />
-                        Confirmed
+                        Members
                       </span>
-                      <strong>{stats.confirmed}</strong>
+
+                      <strong>
+                        {
+                          rewardStats.totalMembers
+                        }
+                      </strong>
                     </div>
 
                     <div className="admin-status-row">
                       <span>
                         <i className="dot pending-dot" />
-                        Pending
+                        Current Points
                       </span>
-                      <strong>{stats.pending}</strong>
+
+                      <strong>
+                        {rewardStats.totalPoints.toLocaleString()}
+                      </strong>
                     </div>
 
                     <div className="admin-status-row">
                       <span>
-                        <i className="dot cancelled-dot" />
-                        Cancelled
+                        <i className="dot confirmed-dot" />
+                        Lifetime
                       </span>
-                      <strong>{stats.cancelled}</strong>
+
+                      <strong>
+                        {rewardStats.lifetimePoints.toLocaleString()}
+                      </strong>
                     </div>
-                  </div>
-
-                  <div className="admin-mini-panel">
-                    <div className="admin-mini-heading">
-                      <div className="admin-mini-icon">
-                        <Clock3 size={17} />
-                      </div>
-
-                      <div>
-                        <span>TIME SLOTS</span>
-                        <strong>Availability</strong>
-                      </div>
-                    </div>
-
-                    <div className="admin-big-number">
-                      {stats.availableSlots}
-                    </div>
-
-                    <p className="admin-mini-description">
-                      Available slots ready for customer booking.
-                    </p>
 
                     <button
                       type="button"
                       className="admin-outline-button"
-                      onClick={openAddSlotForm}
+                      onClick={() =>
+                        setActiveTab(
+                          TABS.REWARDS
+                        )
+                      }
                     >
-                      <Plus size={14} />
-                      Add Time Slot
+                      <Award
+                        size={14}
+                      />
+                      Manage Rewards
                     </button>
                   </div>
 
                   <div className="admin-mini-panel">
                     <div className="admin-mini-heading">
                       <div className="admin-mini-icon">
-                        <Bell size={17} />
+                        <Clock3
+                          size={17}
+                        />
                       </div>
 
                       <div>
-                        <span>ANNOUNCEMENTS</span>
-                        <strong>Live Messages</strong>
+                        <span>
+                          TIME SLOTS
+                        </span>
+
+                        <strong>
+                          Availability
+                        </strong>
                       </div>
                     </div>
 
                     <div className="admin-big-number">
                       {
-                        announcements.filter(
-                          (item) => item.is_active
-                        ).length
+                        stats.availableSlots
                       }
                     </div>
 
                     <p className="admin-mini-description">
-                      Active announcements visible to customers.
+                      Available
+                      booking
+                      windows.
                     </p>
+
+                    <button
+                      type="button"
+                      className="admin-outline-button"
+                      onClick={
+                        openAddSlotForm
+                      }
+                    >
+                      <Plus size={14} />
+                      Add Time
+                      Slot
+                    </button>
                   </div>
                 </div>
               </section>
             </>
           )}
 
-          {activeTab === TABS.TURFS && (
+          {/* =================================================
+              TURFS
+              ================================================= */}
+
+          {activeTab ===
+            TABS.TURFS && (
             <section className="admin-panel">
               <div className="admin-panel-title">
                 <div>
                   <div className="admin-section-kicker">
-                    FACILITY MANAGEMENT
+                    FACILITY
+                    MANAGEMENT
                   </div>
-                  <h2>Turfs</h2>
+
+                  <h2>
+                    Turfs
+                  </h2>
+
                   <p>
-                    Create, edit and control the facilities available
-                    for booking.
+                    Manage facilities
+                    available for
+                    booking.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className="admin-primary-button"
-                  onClick={openAddTurfForm}
+                  onClick={
+                    openAddTurfForm
+                  }
                 >
                   <Plus size={14} />
                   Add Turf
@@ -1346,88 +2761,128 @@ function Admin() {
               {showTurfForm && (
                 <form
                   className="admin-form"
-                  onSubmit={handleTurfSubmit}
+                  onSubmit={
+                    handleTurfSubmit
+                  }
                 >
                   <div className="admin-form-heading">
                     <strong>
-                      {editingTurf ? "Edit Turf" : "Create New Turf"}
+                      {editingTurf
+                        ? "Edit Turf"
+                        : "Create New Turf"}
                     </strong>
 
                     <span>
-                      Configure the facility information shown to
-                      customers.
+                      Configure
+                      facility
+                      information.
                     </span>
                   </div>
 
                   <div className="admin-form-fields">
-                    <div className="admin-form-field">
-                      <label>TURF NAME</label>
-                      <input
-                        type="text"
-                        value={turfForm.name}
-                        onChange={(event) =>
-                          setTurfForm((current) => ({
+                    <input
+                      type="text"
+                      value={
+                        turfForm.name
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setTurfForm(
+                          (
+                            current
+                          ) => ({
                             ...current,
-                            name: event.target.value,
-                          }))
-                        }
-                        placeholder="Example: Sportiva Main Arena"
-                      />
-                    </div>
+                            name: event
+                              .target
+                              .value,
+                          })
+                        )
+                      }
+                      placeholder="Turf name"
+                      required
+                    />
 
-                    <div className="admin-form-field">
-                      <label>PRICE PER HOUR</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={turfForm.price_per_hour}
-                        onChange={(event) =>
-                          setTurfForm((current) => ({
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={
+                        turfForm.price_per_hour
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setTurfForm(
+                          (
+                            current
+                          ) => ({
                             ...current,
-                            price_per_hour: event.target.value,
-                          }))
-                        }
-                        placeholder="2500"
-                      />
-                    </div>
+                            price_per_hour:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Price per hour"
+                      required
+                    />
 
-                    <div className="admin-form-field full">
-                      <label>DESCRIPTION</label>
-                      <input
-                        type="text"
-                        value={turfForm.description}
-                        onChange={(event) =>
-                          setTurfForm((current) => ({
+                    <input
+                      type="text"
+                      value={
+                        turfForm.description
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setTurfForm(
+                          (
+                            current
+                          ) => ({
                             ...current,
-                            description: event.target.value,
-                          }))
-                        }
-                        placeholder="Short description of the turf"
-                      />
-                    </div>
+                            description:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Description"
+                    />
 
-                    <div className="admin-form-field full">
-                      <label>IMAGE URL</label>
-                      <input
-                        type="url"
-                        value={turfForm.image_url}
-                        onChange={(event) =>
-                          setTurfForm((current) => ({
+                    <input
+                      type="url"
+                      value={
+                        turfForm.image_url
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setTurfForm(
+                          (
+                            current
+                          ) => ({
                             ...current,
-                            image_url: event.target.value,
-                          }))
-                        }
-                        placeholder="https://..."
-                      />
-                    </div>
+                            image_url:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Image URL"
+                    />
                   </div>
 
                   <div className="admin-form-actions">
                     <button
                       type="button"
                       className="admin-cancel-button"
-                      onClick={closeTurfForm}
+                      onClick={
+                        closeTurfForm
+                      }
                     >
                       Cancel
                     </button>
@@ -1435,10 +2890,14 @@ function Admin() {
                     <button
                       type="submit"
                       className="admin-primary-button"
-                      disabled={refreshing}
+                      disabled={
+                        refreshing
+                      }
                     >
-                      <Check size={14} />
-                      {editingTurf ? "Save Changes" : "Create Turf"}
+                      <Check
+                        size={14}
+                      />
+                      Save
                     </button>
                   </div>
                 </form>
@@ -1446,14 +2905,29 @@ function Admin() {
 
               <div className="turf-list-header">
                 <div>
-                  <strong>Registered Facilities</strong>
-                  <span>All turf facilities currently configured.</span>
+                  <strong>
+                    Registered
+                    Facilities
+                  </strong>
+
+                  <span>
+                    {
+                      turfs.length
+                    }{" "}
+                    configured
+                    turfs
+                  </span>
                 </div>
 
                 <div className="turf-list-summary">
                   <span className="turf-summary-active">
                     {
-                      turfs.filter((turf) => turf.is_active)
+                      turfs.filter(
+                        (
+                          turf
+                        ) =>
+                          turf.is_active
+                      )
                         .length
                     }{" "}
                     active
@@ -1461,7 +2935,12 @@ function Admin() {
 
                   <span className="turf-summary-disabled">
                     {
-                      turfs.filter((turf) => !turf.is_active)
+                      turfs.filter(
+                        (
+                          turf
+                        ) =>
+                          !turf.is_active
+                      )
                         .length
                     }{" "}
                     disabled
@@ -1472,122 +2951,213 @@ function Admin() {
               {turfs.length === 0 ? (
                 <div className="admin-empty">
                   <div className="admin-empty-icon">
-                    <Trophy size={23} />
+                    <Trophy
+                      size={23}
+                    />
                   </div>
 
-                  <h3>No turfs created</h3>
-                  <p>Create your first turf facility.</p>
+                  <h3>
+                    No turfs created
+                  </h3>
+
+                  <p>
+                    Create your first
+                    turf above.
+                  </p>
                 </div>
               ) : (
                 <div className="turf-management-list">
-                  {turfs.map((turf, index) => (
-                    <div
-                      key={turf.id}
-                      className="turf-management-row"
-                    >
-                      <div className="turf-list-main">
-                        <div className="turf-list-number">
-                          {String(index + 1).padStart(2, "0")}
+                  {turfs.map(
+                    (
+                      turf,
+                      index
+                    ) => (
+                      <div
+                        key={
+                          turf.id
+                        }
+                        className="turf-management-row"
+                      >
+                        <div className="turf-list-main">
+                          <div className="turf-list-number">
+                            {String(
+                              index +
+                                1
+                            ).padStart(
+                              2,
+                              "0"
+                            )}
+                          </div>
+
+                          <div className="turf-list-image">
+                            {turf.image_url ? (
+                              <img
+                                src={
+                                  turf.image_url
+                                }
+                                alt={
+                                  turf.name
+                                }
+                              />
+                            ) : (
+                              <Trophy
+                                size={
+                                  19
+                                }
+                              />
+                            )}
+                          </div>
+
+                          <div className="turf-list-info">
+                            <strong>
+                              {
+                                turf.name
+                              }
+                            </strong>
+
+                            <span>
+                              {turf.description ||
+                                "No description"}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="turf-list-image">
-                          {turf.image_url ? (
-                            <img
-                              src={turf.image_url}
-                              alt={turf.name}
-                            />
-                          ) : (
-                            <Trophy size={19} />
-                          )}
-                        </div>
-
-                        <div className="turf-list-info">
-                          <strong>{turf.name}</strong>
+                        <div className="turf-list-price">
                           <span>
-                            {turf.description ||
-                              "No description provided"}
+                            PRICE
+                          </span>
+
+                          <strong>
+                            {formatMoney(
+                              turf.price_per_hour
+                            )}
+                            <small>
+                              /hr
+                            </small>
+                          </strong>
+                        </div>
+
+                        <div className="turf-list-date">
+                          <span>
+                            CREATED
+                          </span>
+
+                          <strong>
+                            {formatDate(
+                              turf.created_at?.slice(
+                                0,
+                                10
+                              )
+                            )}
+                          </strong>
+                        </div>
+
+                        <div className="turf-list-status">
+                          <span
+                            className={`turf-list-status-badge ${
+                              turf.is_active
+                                ? "active"
+                                : "disabled"
+                            }`}
+                          >
+                            <i />
+                            {turf.is_active
+                              ? "Active"
+                              : "Disabled"}
                           </span>
                         </div>
+
+                        <div className="turf-list-actions">
+                          <button
+                            type="button"
+                            className="turf-action-toggle"
+                            onClick={() =>
+                              toggleTurf(
+                                turf
+                              )
+                            }
+                            disabled={
+                              refreshing
+                            }
+                          >
+                            <Power
+                              size={
+                                12
+                              }
+                            />
+                            {turf.is_active
+                              ? "Disable"
+                              : "Enable"}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="turf-action-toggle"
+                            onClick={() =>
+                              openEditTurfForm(
+                                turf
+                              )
+                            }
+                            disabled={
+                              refreshing
+                            }
+                          >
+                            <Edit3
+                              size={
+                                12
+                              }
+                            />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            className="turf-action-delete"
+                            onClick={() =>
+                              deleteTurf(
+                                turf
+                              )
+                            }
+                            disabled={
+                              refreshing
+                            }
+                          >
+                            <Trash2
+                              size={
+                                14
+                              }
+                            />
+                          </button>
+                        </div>
                       </div>
-
-                      <div className="turf-list-price">
-                        <span>PRICE</span>
-                        <strong>
-                          {formatMoney(turf.price_per_hour)}
-                          <small>/hr</small>
-                        </strong>
-                      </div>
-
-                      <div className="turf-list-date">
-                        <span>CREATED</span>
-                        <strong>
-                          {formatDate(
-                            turf.created_at?.slice(0, 10)
-                          )}
-                        </strong>
-                      </div>
-
-                      <div className="turf-list-status">
-                        <span
-                          className={`turf-list-status-badge ${
-                            turf.is_active
-                              ? "active"
-                              : "disabled"
-                          }`}
-                        >
-                          <i />
-                          {turf.is_active ? "Active" : "Disabled"}
-                        </span>
-                      </div>
-
-                      <div className="turf-list-actions">
-                        <button
-                          type="button"
-                          className="turf-action-toggle"
-                          onClick={() => toggleTurf(turf)}
-                          disabled={refreshing}
-                        >
-                          <Power size={12} />
-                          {turf.is_active ? "Disable" : "Enable"}
-                        </button>
-
-                        <button
-                          type="button"
-                          className="turf-action-toggle"
-                          onClick={() => openEditTurfForm(turf)}
-                          disabled={refreshing}
-                        >
-                          <Edit3 size={12} />
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          className="turf-action-delete"
-                          onClick={() => deleteTurf(turf)}
-                          disabled={refreshing}
-                          title="Delete turf"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </section>
           )}
 
-          {activeTab === TABS.SLOTS && (
+          {/* =================================================
+              TIME SLOTS
+              ================================================= */}
+
+          {activeTab ===
+            TABS.SLOTS && (
             <section className="admin-panel">
               <div className="admin-panel-title">
                 <div>
                   <div className="admin-section-kicker">
-                    BOOKING AVAILABILITY
+                    BOOKING
+                    AVAILABILITY
                   </div>
-                  <h2>Time Slots</h2>
+
+                  <h2>
+                    Time Slots
+                  </h2>
+
                   <p>
-                    Create and manage the exact schedule customers
+                    Control the exact
+                    schedule customers
                     can book.
                   </p>
                 </div>
@@ -1595,17 +3165,22 @@ function Admin() {
                 <button
                   type="button"
                   className="admin-primary-button"
-                  onClick={openAddSlotForm}
+                  onClick={
+                    openAddSlotForm
+                  }
                 >
                   <Plus size={14} />
-                  Add Time Slot
+                  Add Time
+                  Slot
                 </button>
               </div>
 
               {showSlotForm && (
                 <form
                   className="admin-form admin-slot-form"
-                  onSubmit={handleSlotSubmit}
+                  onSubmit={
+                    handleSlotSubmit
+                  }
                 >
                   <div className="admin-form-heading">
                     <strong>
@@ -1615,117 +3190,170 @@ function Admin() {
                     </strong>
 
                     <span>
-                      Choose a turf, date and booking window.
+                      Choose the turf,
+                      date and booking
+                      window.
                     </span>
                   </div>
 
                   <div className="admin-form-fields">
                     <div className="admin-form-field">
-                      <label>TURF</label>
-
-                      <select
-                        value={slotForm.turf_id}
-                        onChange={(event) =>
-                          setSlotForm((current) => ({
-                            ...current,
-                            turf_id: event.target.value,
-                          }))
-                        }
-                        required
-                      >
-                        <option value="">Select turf</option>
-
-                        {turfs
-                          .filter((turf) => turf.is_active)
-                          .map((turf) => (
-                            <option
-                              key={turf.id}
-                              value={turf.id}
-                            >
-                              {turf.name}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div className="admin-form-field">
-                      <label>DATE</label>
-
-                      <input
-                        type="date"
-                        min={editingSlot ? undefined : getTodayString()}
-                        value={slotForm.slot_date}
-                        onChange={(event) =>
-                          setSlotForm((current) => ({
-                            ...current,
-                            slot_date: event.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="admin-form-field">
-                      <label>START TIME</label>
-
-                      <input
-                        type="time"
-                        value={slotForm.start_time}
-                        onChange={(event) =>
-                          setSlotForm((current) => ({
-                            ...current,
-                            start_time: event.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="admin-form-field">
-                      <label>END TIME</label>
-
-                      <input
-                        type="time"
-                        value={slotForm.end_time}
-                        onChange={(event) =>
-                          setSlotForm((current) => ({
-                            ...current,
-                            end_time: event.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="admin-form-field full">
-                      <label>INITIAL AVAILABILITY</label>
+                      <label>
+                        TURF
+                      </label>
 
                       <select
                         value={
-                          slotForm.is_available
-                            ? "available"
-                            : "unavailable"
+                          slotForm.turf_id
                         }
-                        onChange={(event) =>
-                          setSlotForm((current) => ({
-                            ...current,
-                            is_available:
-                              event.target.value === "available",
-                          }))
+                        onChange={(
+                          event
+                        ) =>
+                          setSlotForm(
+                            (
+                              current
+                            ) => ({
+                              ...current,
+                              turf_id:
+                                event
+                                  .target
+                                  .value,
+                            })
+                          )
                         }
+                        required
                       >
-                        <option value="available">
-                          Available for booking
+                        <option value="">
+                          Select
+                          turf
                         </option>
-                        <option value="unavailable">
-                          Unavailable
-                        </option>
-                      </select>
 
-                      <div className="admin-slot-form-note">
-                        <ShieldCheck size={12} />
-                        Overlapping slots are blocked by the database.
-                      </div>
+                        {turfs
+                          .filter(
+                            (
+                              turf
+                            ) =>
+                              turf.is_active ||
+                              String(
+                                turf.id
+                              ) ===
+                                String(
+                                  slotForm.turf_id
+                                )
+                          )
+                          .map(
+                            (
+                              turf
+                            ) => (
+                              <option
+                                key={
+                                  turf.id
+                                }
+                                value={
+                                  turf.id
+                                }
+                              >
+                                {
+                                  turf.name
+                                }
+                              </option>
+                            )
+                          )}
+                      </select>
+                    </div>
+
+                    <div className="admin-form-field">
+                      <label>
+                        DATE
+                      </label>
+
+                      <input
+                        type="date"
+                        min={
+                          editingSlot
+                            ? undefined
+                            : getTodayString()
+                        }
+                        value={
+                          slotForm.slot_date
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setSlotForm(
+                            (
+                              current
+                            ) => ({
+                              ...current,
+                              slot_date:
+                                event
+                                  .target
+                                  .value,
+                            })
+                          )
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div className="admin-form-field">
+                      <label>
+                        START
+                        TIME
+                      </label>
+
+                      <input
+                        type="time"
+                        value={
+                          slotForm.start_time
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setSlotForm(
+                            (
+                              current
+                            ) => ({
+                              ...current,
+                              start_time:
+                                event
+                                  .target
+                                  .value,
+                            })
+                          )
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div className="admin-form-field">
+                      <label>
+                        END
+                        TIME
+                      </label>
+
+                      <input
+                        type="time"
+                        value={
+                          slotForm.end_time
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setSlotForm(
+                            (
+                              current
+                            ) => ({
+                              ...current,
+                              end_time:
+                                event
+                                  .target
+                                  .value,
+                            })
+                          )
+                        }
+                        required
+                      />
                     </div>
                   </div>
 
@@ -1733,7 +3361,9 @@ function Admin() {
                     <button
                       type="button"
                       className="admin-cancel-button"
-                      onClick={closeSlotForm}
+                      onClick={
+                        closeSlotForm
+                      }
                     >
                       Cancel
                     </button>
@@ -1741,13 +3371,13 @@ function Admin() {
                     <button
                       type="submit"
                       className="admin-primary-button"
-                      disabled={refreshing}
+                      disabled={
+                        refreshing
+                      }
                     >
-                      {editingSlot ? (
-                        <Check size={14} />
-                      ) : (
-                        <Plus size={14} />
-                      )}
+                      <Check
+                        size={14}
+                      />
 
                       {editingSlot
                         ? "Save Slot"
@@ -1760,49 +3390,88 @@ function Admin() {
               <div className="admin-slot-toolbar">
                 <div className="admin-slot-toolbar-info">
                   <strong>
-                    {filteredSlots.length} slot
-                    {filteredSlots.length === 1 ? "" : "s"} shown
+                    {
+                      filteredSlots.length
+                    }{" "}
+                    slots
                   </strong>
 
                   <span>
-                    {slots.length} total configured slots
+                    {
+                      slots.length
+                    }{" "}
+                    total
                   </span>
                 </div>
 
                 <div className="admin-slot-filters">
                   <select
                     className="admin-slot-filter"
-                    value={slotTurfFilter}
-                    onChange={(event) =>
-                      setSlotTurfFilter(event.target.value)
+                    value={
+                      slotTurfFilter
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setSlotTurfFilter(
+                        event
+                          .target
+                          .value
+                      )
                     }
                   >
-                    <option value="all">All turfs</option>
+                    <option value="all">
+                      All turfs
+                    </option>
 
-                    {turfs.map((turf) => (
-                      <option key={turf.id} value={turf.id}>
-                        {turf.name}
-                      </option>
-                    ))}
+                    {turfs.map(
+                      (turf) => (
+                        <option
+                          key={
+                            turf.id
+                          }
+                          value={
+                            turf.id
+                          }
+                        >
+                          {
+                            turf.name
+                          }
+                        </option>
+                      )
+                    )}
                   </select>
 
                   <input
                     type="date"
                     className="admin-slot-filter"
-                    value={slotDateFilter}
-                    onChange={(event) =>
-                      setSlotDateFilter(event.target.value)
+                    value={
+                      slotDateFilter
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setSlotDateFilter(
+                        event
+                          .target
+                          .value
+                      )
                     }
                   />
 
-                  {(slotTurfFilter !== "all" ||
+                  {(slotTurfFilter !==
+                    "all" ||
                     slotDateFilter) && (
                     <button
                       type="button"
                       className="admin-small-button"
                       onClick={() => {
-                        setSlotTurfFilter("all");
-                        setSlotDateFilter("");
+                        setSlotTurfFilter(
+                          "all"
+                        );
+                        setSlotDateFilter(
+                          ""
+                        );
                       }}
                     >
                       <X size={12} />
@@ -1812,17 +3481,24 @@ function Admin() {
                 </div>
               </div>
 
-              {filteredSlots.length === 0 ? (
+              {filteredSlots.length ===
+              0 ? (
                 <div className="admin-empty admin-slot-empty">
                   <div className="admin-empty-icon">
-                    <Clock3 size={23} />
+                    <Clock3
+                      size={23}
+                    />
                   </div>
 
-                  <h3>No time slots found</h3>
+                  <h3>
+                    No time slots
+                    found
+                  </h3>
 
                   <p>
-                    Add a time slot above to make a booking window
-                    available for customers.
+                    Add a time slot to
+                    make a booking
+                    window available.
                   </p>
                 </div>
               ) : (
@@ -1830,116 +3506,160 @@ function Admin() {
                   <table className="admin-table admin-slot-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
-                        <th>Turf</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th>
+                          ID
+                        </th>
+                        <th>
+                          Turf
+                        </th>
+                        <th>
+                          Date
+                        </th>
+                        <th>
+                          Time
+                        </th>
+                        <th>
+                          Status
+                        </th>
+                        <th>
+                          Actions
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      {filteredSlots.map((slot) => (
-                        <tr key={slot.id}>
-                          <td>
-                            <span className="table-id">
-                              #{slot.id}
-                            </span>
-                          </td>
-
-                          <td>
-                            <span className="table-primary">
-                              {getTurfName(slot.turf_id)}
-                            </span>
-                          </td>
-
-                          <td>
-                            <div className="admin-slot-date">
-                              <strong>
-                                {formatDate(slot.slot_date)}
-                              </strong>
-
-                              <span>{slot.slot_date}</span>
-                            </div>
-                          </td>
-
-                          <td>
-                            <div className="admin-slot-time">
-                              <span>
-                                {formatTime(slot.start_time)}
-                              </span>
-
-                              <span className="separator">—</span>
-
-                              <span>
-                                {formatTime(slot.end_time)}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td>
-                            <span
-                              className={`admin-slot-status ${
-                                slot.is_available
-                                  ? "available"
-                                  : "unavailable"
-                              }`}
-                            >
-                              <i />
-                              {slot.is_available
-                                ? "Available"
-                                : "Unavailable"}
-                            </span>
-                          </td>
-
-                          <td>
-                            <div className="admin-slot-actions">
-                              <button
-                                type="button"
-                                className="admin-slot-action edit"
-                                onClick={() =>
-                                  openEditSlotForm(slot)
+                      {filteredSlots.map(
+                        (slot) => (
+                          <tr
+                            key={
+                              slot.id
+                            }
+                          >
+                            <td>
+                              <span className="table-id">
+                                #
+                                {
+                                  slot.id
                                 }
-                                disabled={refreshing}
-                                title="Edit slot"
-                              >
-                                <Edit3 size={12} />
-                                Edit
-                              </button>
+                              </span>
+                            </td>
 
-                              <button
-                                type="button"
-                                className="admin-slot-action toggle"
-                                onClick={() =>
-                                  toggleSlotAvailability(slot)
-                                }
-                                disabled={refreshing}
-                                title={
+                            <td>
+                              <span className="table-primary">
+                                {getTurfName(
+                                  slot.turf_id
+                                )}
+                              </span>
+                            </td>
+
+                            <td>
+                              {formatDate(
+                                slot.slot_date
+                              )}
+                            </td>
+
+                            <td>
+                              <div className="admin-slot-time">
+                                <span>
+                                  {formatTime(
+                                    slot.start_time
+                                  )}
+                                </span>
+
+                                <span className="separator">
+                                  —
+                                </span>
+
+                                <span>
+                                  {formatTime(
+                                    slot.end_time
+                                  )}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td>
+                              <span
+                                className={`admin-slot-status ${
                                   slot.is_available
-                                    ? "Make unavailable"
-                                    : "Make available"
-                                }
+                                    ? "available"
+                                    : "unavailable"
+                                }`}
                               >
-                                <Power size={12} />
+                                <i />
                                 {slot.is_available
-                                  ? "Disable"
-                                  : "Enable"}
-                              </button>
+                                  ? "Available"
+                                  : "Unavailable"}
+                              </span>
+                            </td>
 
-                              <button
-                                type="button"
-                                className="admin-slot-action delete"
-                                onClick={() => deleteSlot(slot)}
-                                disabled={refreshing}
-                                title="Delete slot"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            <td>
+                              <div className="admin-slot-actions">
+                                <button
+                                  type="button"
+                                  className="admin-slot-action edit"
+                                  onClick={() =>
+                                    openEditSlotForm(
+                                      slot
+                                    )
+                                  }
+                                  disabled={
+                                    refreshing
+                                  }
+                                >
+                                  <Edit3
+                                    size={
+                                      12
+                                    }
+                                  />
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-slot-action toggle"
+                                  onClick={() =>
+                                    toggleSlotAvailability(
+                                      slot
+                                    )
+                                  }
+                                  disabled={
+                                    refreshing
+                                  }
+                                >
+                                  <Power
+                                    size={
+                                      12
+                                    }
+                                  />
+                                  {slot.is_available
+                                    ? "Disable"
+                                    : "Enable"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-slot-action delete"
+                                  onClick={() =>
+                                    deleteSlot(
+                                      slot
+                                    )
+                                  }
+                                  disabled={
+                                    refreshing
+                                  }
+                                >
+                                  <Trash2
+                                    size={
+                                      13
+                                    }
+                                  />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1947,31 +3667,49 @@ function Admin() {
             </section>
           )}
 
-          {activeTab === TABS.BOOKINGS && (
+          {/* =================================================
+              BOOKINGS
+              ================================================= */}
+
+          {activeTab ===
+            TABS.BOOKINGS && (
             <section className="admin-panel">
               <div className="admin-panel-title">
                 <div>
                   <div className="admin-section-kicker">
-                    RESERVATION MANAGEMENT
+                    RESERVATION
+                    MANAGEMENT
                   </div>
-                  <h2>Bookings</h2>
+
+                  <h2>
+                    Bookings
+                  </h2>
+
                   <p>
-                    Review reservations and approve or cancel
-                    pending requests.
+                    Review and manage
+                    customer
+                    reservations.
                   </p>
                 </div>
 
                 <div className="admin-booking-summary">
-                  {filteredBookings.length} shown
+                  {
+                    filteredBookings.length
+                  }{" "}
+                  shown
                 </div>
               </div>
 
               <div
                 style={{
-                  padding: "16px 22px",
-                  borderBottom: "1px solid #e8edea",
-                  background: "#fbfcfb",
-                  display: "grid",
+                  padding:
+                    "16px 22px",
+                  borderBottom:
+                    "1px solid #e8edea",
+                  background:
+                    "#fbfcfb",
+                  display:
+                    "grid",
                   gridTemplateColumns:
                     "minmax(220px, 1.5fr) repeat(3, minmax(140px, 1fr))",
                   gap: 9,
@@ -1979,105 +3717,170 @@ function Admin() {
               >
                 <input
                   type="text"
-                  placeholder="Search booking, customer, phone or turf..."
-                  value={bookingSearch}
-                  onChange={(event) =>
-                    setBookingSearch(event.target.value)
+                  placeholder="Search customer, phone or turf..."
+                  value={
+                    bookingSearch
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setBookingSearch(
+                      event
+                        .target
+                        .value
+                    )
                   }
                   style={{
                     height: 36,
-                    padding: "0 11px",
-                    border: "1px solid #dce4df",
+                    padding:
+                      "0 11px",
+                    border:
+                      "1px solid #dce4df",
                     borderRadius: 8,
-                    outline: "none",
-                    background: "#fff",
-                    color: "#17221d",
-                    fontFamily: "inherit",
+                    outline:
+                      "none",
+                    background:
+                      "#fff",
+                    color:
+                      "#17221d",
+                    fontFamily:
+                      "inherit",
                     fontSize: 10,
                   }}
                 />
 
                 <select
-                  value={bookingStatusFilter}
-                  onChange={(event) =>
-                    setBookingStatusFilter(event.target.value)
+                  value={
+                    bookingStatusFilter
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setBookingStatusFilter(
+                      event
+                        .target
+                        .value
+                    )
                   }
                   style={{
                     height: 36,
-                    padding: "0 10px",
-                    border: "1px solid #dce4df",
+                    border:
+                      "1px solid #dce4df",
                     borderRadius: 8,
-                    outline: "none",
-                    background: "#fff",
-                    color: "#34493d",
-                    fontFamily: "inherit",
+                    padding:
+                      "0 10px",
+                    background:
+                      "#fff",
                     fontSize: 10,
-                    fontWeight: 700,
                   }}
                 >
-                  <option value="all">All statuses</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option value="all">
+                    All statuses
+                  </option>
+                  <option value="pending">
+                    Pending
+                  </option>
+                  <option value="confirmed">
+                    Confirmed
+                  </option>
+                  <option value="cancelled">
+                    Cancelled
+                  </option>
                 </select>
 
                 <select
-                  value={bookingTurfFilter}
-                  onChange={(event) =>
-                    setBookingTurfFilter(event.target.value)
+                  value={
+                    bookingTurfFilter
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setBookingTurfFilter(
+                      event
+                        .target
+                        .value
+                    )
                   }
                   style={{
                     height: 36,
-                    padding: "0 10px",
-                    border: "1px solid #dce4df",
+                    border:
+                      "1px solid #dce4df",
                     borderRadius: 8,
-                    outline: "none",
-                    background: "#fff",
-                    color: "#34493d",
-                    fontFamily: "inherit",
+                    padding:
+                      "0 10px",
+                    background:
+                      "#fff",
                     fontSize: 10,
-                    fontWeight: 700,
                   }}
                 >
-                  <option value="all">All turfs</option>
+                  <option value="all">
+                    All turfs
+                  </option>
 
-                  {turfs.map((turf) => (
-                    <option key={turf.id} value={turf.id}>
-                      {turf.name}
-                    </option>
-                  ))}
+                  {turfs.map(
+                    (turf) => (
+                      <option
+                        key={
+                          turf.id
+                        }
+                        value={
+                          turf.id
+                        }
+                      >
+                        {
+                          turf.name
+                        }
+                      </option>
+                    )
+                  )}
                 </select>
 
                 <input
                   type="date"
-                  value={bookingDateFilter}
-                  onChange={(event) =>
-                    setBookingDateFilter(event.target.value)
+                  value={
+                    bookingDateFilter
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setBookingDateFilter(
+                      event
+                        .target
+                        .value
+                    )
                   }
                   style={{
                     height: 36,
-                    padding: "0 10px",
-                    border: "1px solid #dce4df",
+                    border:
+                      "1px solid #dce4df",
                     borderRadius: 8,
-                    outline: "none",
-                    background: "#fff",
-                    color: "#34493d",
-                    fontFamily: "inherit",
+                    padding:
+                      "0 10px",
+                    background:
+                      "#fff",
                     fontSize: 10,
-                    fontWeight: 700,
                   }}
                 />
               </div>
 
-              {filteredBookings.length === 0 ? (
+              {filteredBookings.length ===
+              0 ? (
                 <div className="admin-empty">
                   <div className="admin-empty-icon">
-                    <CalendarDays size={23} />
+                    <CalendarDays
+                      size={23}
+                    />
                   </div>
 
-                  <h3>No bookings found</h3>
+                  <h3>
+                    No bookings
+                    found
+                  </h3>
+
                   <p>
-                    No reservations match the selected filters.
+                    No booking
+                    matches the
+                    current filters.
                   </p>
                 </div>
               ) : (
@@ -2085,156 +3888,196 @@ function Admin() {
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
-                        <th>Customer</th>
-                        <th>Turf</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th>
+                          ID
+                        </th>
+                        <th>
+                          Customer
+                        </th>
+                        <th>
+                          Turf
+                        </th>
+                        <th>
+                          Date
+                        </th>
+                        <th>
+                          Time
+                        </th>
+                        <th>
+                          Amount
+                        </th>
+                        <th>
+                          Status
+                        </th>
+                        <th>
+                          Actions
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      {filteredBookings.map((booking) => {
-                        const profile = getProfile(booking.user_id);
-                        const status = normalizeStatus(
-                          booking.status
-                        );
+                      {filteredBookings.map(
+                        (booking) => {
+                          const profile =
+                            getProfile(
+                              booking.user_id
+                            );
 
-                        return (
-                          <tr key={booking.id}>
-                            <td>
-                              <span className="table-id">
-                                #{booking.id}
-                              </span>
-                            </td>
+                          const status =
+                            normalizeStatus(
+                              booking.status
+                            );
 
-                            <td>
-                              <div className="table-user">
-                                <div className="table-avatar">
-                                  <UserRound size={13} />
-                                </div>
+                          return (
+                            <tr
+                              key={
+                                booking.id
+                              }
+                            >
+                              <td>
+                                <span className="table-id">
+                                  #
+                                  {
+                                    booking.id
+                                  }
+                                </span>
+                              </td>
 
-                                <div>
+                              <td>
+                                <div className="table-user">
+                                  <div className="table-avatar">
+                                    <UserRound
+                                      size={
+                                        13
+                                      }
+                                    />
+                                  </div>
+
                                   <strong>
                                     {profile?.full_name ||
-                                      "Unknown User"}
+                                      "Unknown"}
                                   </strong>
+                                </div>
+                              </td>
 
-                                  {profile?.phone && (
-                                    <div
-                                      style={{
-                                        marginTop: 2,
-                                        color: "#8d9892",
-                                        fontSize: 8,
-                                      }}
-                                    >
-                                      {profile.phone}
-                                    </div>
+                              <td>
+                                <span className="table-primary">
+                                  {getTurfName(
+                                    booking.turf_id
+                                  )}
+                                </span>
+                              </td>
+
+                              <td>
+                                {formatDate(
+                                  booking.booking_date
+                                )}
+                              </td>
+
+                              <td>
+                                <div className="table-time">
+                                  {formatTime(
+                                    booking.start_time
+                                  )}
+                                  <ChevronRight
+                                    size={
+                                      11
+                                    }
+                                  />
+                                  {formatTime(
+                                    booking.end_time
                                   )}
                                 </div>
-                              </div>
-                            </td>
+                              </td>
 
-                            <td>
-                              <span className="table-primary">
-                                {getTurfName(booking.turf_id)}
-                              </span>
-                            </td>
-
-                            <td>
-                              {formatDate(booking.booking_date)}
-                            </td>
-
-                            <td>
-                              <div className="table-time">
-                                <span>
-                                  {formatTime(booking.start_time)}
+                              <td>
+                                <span className="table-amount">
+                                  {formatMoney(
+                                    booking.total_amount
+                                  )}
                                 </span>
-                                <ChevronRight size={11} />
-                                <span>
-                                  {formatTime(booking.end_time)}
-                                </span>
-                              </div>
-                            </td>
+                              </td>
 
-                            <td>
-                              <span className="table-amount">
-                                {formatMoney(booking.total_amount)}
-                              </span>
-                            </td>
-
-                            <td>
-                              <StatusBadge status={status} />
-                            </td>
-
-                            <td>
-                              <div className="booking-actions">
-                                {status === "pending" && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="booking-confirm"
-                                      onClick={() =>
-                                        updateBookingStatus(
-                                          booking,
-                                          "confirmed"
-                                        )
-                                      }
-                                      disabled={
-                                        processingBookingId ===
-                                        booking.id
-                                      }
-                                    >
-                                      <Check size={11} />
-                                      Confirm
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className="booking-cancel"
-                                      onClick={() =>
-                                        updateBookingStatus(
-                                          booking,
-                                          "cancelled"
-                                        )
-                                      }
-                                      disabled={
-                                        processingBookingId ===
-                                        booking.id
-                                      }
-                                    >
-                                      <X size={11} />
-                                      Cancel
-                                    </button>
-                                  </>
-                                )}
-
-                                {status !== "pending" && (
-                                  <span className="action-complete">
-                                    {status === "confirmed"
-                                      ? "Confirmed"
-                                      : "Cancelled"}
-                                  </span>
-                                )}
-
-                                <button
-                                  type="button"
-                                  className="admin-slot-action edit"
-                                  onClick={() =>
-                                    setSelectedBooking(booking)
+                              <td>
+                                <StatusBadge
+                                  status={
+                                    status
                                   }
-                                  title="View booking"
-                                >
-                                  <Eye size={12} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                                />
+                              </td>
+
+                              <td>
+                                <div className="booking-actions">
+                                  {status ===
+                                    "pending" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="booking-confirm"
+                                        onClick={() =>
+                                          updateBookingStatus(
+                                            booking,
+                                            "confirmed"
+                                          )
+                                        }
+                                        disabled={
+                                          processingBookingId ===
+                                          booking.id
+                                        }
+                                      >
+                                        <Check
+                                          size={
+                                            11
+                                          }
+                                        />
+                                        Confirm
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="booking-cancel"
+                                        onClick={() =>
+                                          updateBookingStatus(
+                                            booking,
+                                            "cancelled"
+                                          )
+                                        }
+                                        disabled={
+                                          processingBookingId ===
+                                          booking.id
+                                        }
+                                      >
+                                        <X
+                                          size={
+                                            11
+                                          }
+                                        />
+                                        Cancel
+                                      </button>
+                                    </>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    className="admin-slot-action edit"
+                                    onClick={() =>
+                                      setSelectedBooking(
+                                        booking
+                                      )
+                                    }
+                                  >
+                                    <Eye
+                                      size={
+                                        12
+                                      }
+                                    />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2242,74 +4085,117 @@ function Admin() {
             </section>
           )}
 
-          {activeTab === TABS.USERS && (
+          {/* =================================================
+              USERS
+              ================================================= */}
+
+          {activeTab ===
+            TABS.USERS && (
             <section className="admin-panel">
               <div className="admin-panel-title">
                 <div>
                   <div className="admin-section-kicker">
-                    CUSTOMER DIRECTORY
+                    CUSTOMER
+                    DIRECTORY
                   </div>
-                  <h2>Users</h2>
+
+                  <h2>
+                    Users
+                  </h2>
+
                   <p>
-                    Registered customer profiles connected to the
-                    Sportiva platform.
+                    Registered customer
+                    profiles.
                   </p>
                 </div>
 
                 <div className="admin-count-badge">
-                  {users.length} users
+                  {users.length}{" "}
+                  users
                 </div>
               </div>
 
               {users.length === 0 ? (
                 <div className="admin-empty">
                   <div className="admin-empty-icon">
-                    <Users size={23} />
+                    <Users
+                      size={23}
+                    />
                   </div>
 
-                  <h3>No users found</h3>
-                  <p>
-                    Registered users will appear in this directory.
-                  </p>
+                  <h3>
+                    No users found
+                  </h3>
                 </div>
               ) : (
                 <div className="admin-table-wrap">
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>Customer</th>
-                        <th>Phone</th>
-                        <th>Email</th>
-                        <th>Address</th>
-                        <th>Joined</th>
+                        <th>
+                          Customer
+                        </th>
+                        <th>
+                          Phone
+                        </th>
+                        <th>
+                          Email
+                        </th>
+                        <th>
+                          Joined
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      {users.map((user) => (
-                        <tr key={user.id}>
-                          <td>
-                            <div className="table-user">
-                              <div className="table-avatar">
-                                <UserRound size={13} />
+                      {users.map(
+                        (user) => (
+                          <tr
+                            key={
+                              user.id
+                            }
+                          >
+                            <td>
+                              <div className="table-user">
+                                <div className="table-avatar">
+                                  <UserRound
+                                    size={
+                                      13
+                                    }
+                                  />
+                                </div>
+
+                                <strong>
+                                  {
+                                    user.full_name
+                                  }
+                                </strong>
                               </div>
+                            </td>
 
-                              <strong>
-                                {user.full_name || "Unnamed User"}
-                              </strong>
-                            </div>
-                          </td>
+                            <td>
+                              {
+                                user.phone
+                              }
+                            </td>
 
-                          <td>{user.phone || "—"}</td>
-                          <td>{user.email || "—"}</td>
-                          <td>{user.address || "—"}</td>
-                          <td>
-                            {formatDate(
-                              user.created_at?.slice(0, 10)
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                            <td>
+                              {
+                                user.email
+                              }
+                            </td>
+
+                            <td>
+                              {formatDate(
+                                user.created_at?.slice(
+                                  0,
+                                  10
+                                )
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2317,17 +4203,1533 @@ function Admin() {
             </section>
           )}
 
-          {activeTab === TABS.ANNOUNCEMENTS && (
+          {/* =================================================
+              REWARDS
+              ================================================= */}
+
+          {activeTab ===
+            TABS.REWARDS && (
             <section className="admin-panel">
               <div className="admin-panel-title">
                 <div>
                   <div className="admin-section-kicker">
-                    CUSTOMER COMMUNICATION
+                    MEMBERSHIP
+                    PROGRAM
                   </div>
-                  <h2>Announcements</h2>
+
+                  <h2>
+                    Sportiva
+                    Rewards
+                  </h2>
+
                   <p>
-                    Publish important updates and operational
-                    messages to customers.
+                    Manage points,
+                    membership
+                    milestones,
+                    rewards and
+                    reward activity.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display:
+                    "flex",
+                  flexWrap:
+                    "wrap",
+                  gap: 7,
+                  padding:
+                    "14px 22px",
+                  borderBottom:
+                    "1px solid #e8edea",
+                  background:
+                    "#fbfcfb",
+                }}
+              >
+                {[
+                  [
+                    "overview",
+                    "Overview",
+                  ],
+                  [
+                    "members",
+                    "Member Points",
+                  ],
+                  [
+                    "milestones",
+                    "Milestones",
+                  ],
+                  [
+                    "offers",
+                    "Reward Offers",
+                  ],
+                  [
+                    "history",
+                    "Reward History",
+                  ],
+                ].map(
+                  ([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() =>
+                        setRewardSubTab(
+                          id
+                        )
+                      }
+                      style={{
+                        height: 34,
+                        padding:
+                          "0 12px",
+                        border:
+                          "1px solid " +
+                          (rewardSubTab ===
+                          id
+                            ? "#bcd4c3"
+                            : "#e0e7e2"),
+                        borderRadius: 8,
+                        background:
+                          rewardSubTab ===
+                          id
+                            ? "#edf6ef"
+                            : "#fff",
+                        color:
+                          rewardSubTab ===
+                          id
+                            ? "#21683e"
+                            : "#64736b",
+                        fontFamily:
+                          "inherit",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        cursor:
+                          "pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
+
+              {/* Reward Overview */}
+              {rewardSubTab ===
+                "overview" && (
+                <div
+                  style={{
+                    padding:
+                      22,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:
+                        "grid",
+                      gridTemplateColumns:
+                        "repeat(4, minmax(0, 1fr))",
+                      gap: 12,
+                    }}
+                  >
+                    {[
+                      {
+                        label:
+                          "MEMBERS",
+                        value:
+                          rewardStats.totalMembers,
+                        icon: Users,
+                      },
+                      {
+                        label:
+                          "CURRENT POINTS",
+                        value:
+                          rewardStats.totalPoints,
+                        icon: Star,
+                      },
+                      {
+                        label:
+                          "LIFETIME POINTS",
+                        value:
+                          rewardStats.lifetimePoints,
+                        icon: Zap,
+                      },
+                      {
+                        label:
+                          "REWARD OFFERS",
+                        value:
+                          rewardOffers.filter(
+                            (
+                              offer
+                            ) =>
+                              offer.is_active
+                          ).length,
+                        icon: Gift,
+                      },
+                    ].map(
+                      (stat) => {
+                        const Icon =
+                          stat.icon;
+
+                        return (
+                          <div
+                            key={
+                              stat.label
+                            }
+                            style={{
+                              padding:
+                                18,
+                              border:
+                                "1px solid #e1e9e4",
+                              borderRadius:
+                                14,
+                              background:
+                                "#fff",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width:
+                                  38,
+                                height:
+                                  38,
+                                display:
+                                  "flex",
+                                alignItems:
+                                  "center",
+                                justifyContent:
+                                  "center",
+                                borderRadius:
+                                  10,
+                                background:
+                                  "#edf5ef",
+                                color:
+                                  "#28734a",
+                              }}
+                            >
+                              <Icon
+                                size={
+                                  18
+                                }
+                              />
+                            </div>
+
+                            <p
+                              style={{
+                                margin:
+                                  "14px 0 4px",
+                                color:
+                                  "#7b8981",
+                                fontSize:
+                                  8,
+                                fontWeight:
+                                  850,
+                                letterSpacing:
+                                  1,
+                              }}
+                            >
+                              {
+                                stat.label
+                              }
+                            </p>
+
+                            <strong
+                              style={{
+                                color:
+                                  "#17221d",
+                                fontSize:
+                                  24,
+                                fontWeight:
+                                  850,
+                              }}
+                            >
+                              {Number(
+                                stat.value ||
+                                  0
+                              ).toLocaleString()}
+                            </strong>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop:
+                        20,
+                      padding:
+                        20,
+                      border:
+                        "1px solid #e1e9e4",
+                      borderRadius:
+                        14,
+                      background:
+                        "#f9fbfa",
+                    }}
+                  >
+                    <div className="admin-mini-heading">
+                      <div className="admin-mini-icon">
+                        <Award
+                          size={17}
+                        />
+                      </div>
+
+                      <div>
+                        <span>
+                          PROGRAM
+                          STATUS
+                        </span>
+
+                        <strong>
+                          Sportiva
+                          Rewards
+                          System
+                        </strong>
+                      </div>
+                    </div>
+
+                    <p
+                      style={{
+                        margin:
+                          0,
+                        color:
+                          "#6e7d74",
+                        fontSize:
+                          11,
+                        lineHeight:
+                          1.7,
+                      }}
+                    >
+                      Confirmed bookings
+                      can award
+                      points through
+                      the existing
+                      booking reward
+                      system. Use
+                      the tabs above
+                      to control
+                      members,
+                      milestones and
+                      reward offers.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Member Points */}
+              {rewardSubTab ===
+                "members" && (
+                <>
+                  <div
+                    style={{
+                      padding:
+                        "16px 22px",
+                      background:
+                        "#fbfcfb",
+                      borderBottom:
+                        "1px solid #e8edea",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={
+                        rewardSearch
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setRewardSearch(
+                          event
+                            .target
+                            .value
+                        )
+                      }
+                      placeholder="Search member name, email, phone or ID..."
+                      style={{
+                        width:
+                          "100%",
+                        height:
+                          38,
+                        boxSizing:
+                          "border-box",
+                        border:
+                          "1px solid #dce4df",
+                        borderRadius:
+                          8,
+                        padding:
+                          "0 12px",
+                        outline:
+                          "none",
+                        fontFamily:
+                          "inherit",
+                        fontSize:
+                          10,
+                      }}
+                    />
+                  </div>
+
+                  {filteredRewardMembers.length ===
+                  0 ? (
+                    <div className="admin-empty">
+                      <div className="admin-empty-icon">
+                        <Award
+                          size={23}
+                        />
+                      </div>
+
+                      <h3>
+                        No reward
+                        members
+                        found
+                      </h3>
+
+                      <p>
+                        Reward accounts
+                        will appear
+                        here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>
+                              Member
+                            </th>
+                            <th>
+                              Status
+                            </th>
+                            <th>
+                              Current
+                            </th>
+                            <th>
+                              Lifetime
+                            </th>
+                            <th>
+                              Next
+                            </th>
+                            <th>
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {filteredRewardMembers.map(
+                            (
+                              member
+                            ) => {
+                              const profile =
+                                getMemberProfile(
+                                  member.user_id
+                                );
+
+                              const points =
+                                Number(
+                                  member.points ||
+                                    0
+                                );
+
+                              const next =
+                                getNextCheckpoint(
+                                  points
+                                );
+
+                              return (
+                                <tr
+                                  key={
+                                    member.user_id
+                                  }
+                                >
+                                  <td>
+                                    <div className="table-user">
+                                      <div className="table-avatar">
+                                        <UserRound
+                                          size={
+                                            13
+                                          }
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {profile?.full_name ||
+                                            "Unknown"}
+                                        </strong>
+
+                                        <div
+                                          style={{
+                                            marginTop:
+                                              2,
+                                            color:
+                                              "#8c9892",
+                                            fontSize:
+                                              8,
+                                          }}
+                                        >
+                                          {profile?.email ||
+                                            member.user_id}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  <td>
+                                    <span className="status confirmed">
+                                      {getMemberStatus(
+                                        points
+                                      )}
+                                    </span>
+                                  </td>
+
+                                  <td>
+                                    <strong
+                                      style={{
+                                        color:
+                                          "#28734a",
+                                      }}
+                                    >
+                                      {points.toLocaleString()}
+                                    </strong>
+                                  </td>
+
+                                  <td>
+                                    {Number(
+                                      member.lifetime_points ||
+                                        0
+                                    ).toLocaleString()}
+                                  </td>
+
+                                  <td>
+                                    {next
+                                      ? `${next.title} · ${next.points_required} pts`
+                                      : "Maximum"}
+                                  </td>
+
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="admin-small-button"
+                                      onClick={() =>
+                                        openPointsForm(
+                                          member
+                                        )
+                                      }
+                                    >
+                                      <Zap
+                                        size={
+                                          12
+                                        }
+                                      />
+                                      Adjust
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Milestones */}
+              {rewardSubTab ===
+                "milestones" && (
+                <>
+                  <div className="admin-panel-title">
+                    <div>
+                      <h2>
+                        Membership
+                        Milestones
+                      </h2>
+
+                      <p>
+                        Define the
+                        points needed
+                        for each
+                        membership
+                        level.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="admin-primary-button"
+                      onClick={
+                        openAddMilestone
+                      }
+                    >
+                      <Plus
+                        size={14}
+                      />
+                      Add
+                      Milestone
+                    </button>
+                  </div>
+
+                  {showMilestoneForm && (
+                    <form
+                      className="admin-form"
+                      onSubmit={
+                        saveMilestone
+                      }
+                    >
+                      <div className="admin-form-heading">
+                        <strong>
+                          {editingMilestone
+                            ? "Edit Milestone"
+                            : "New Milestone"}
+                        </strong>
+
+                        <span>
+                          This level appears
+                          on the customer's
+                          rewards page.
+                        </span>
+                      </div>
+
+                      <div className="admin-form-fields">
+                        <input
+                          type="text"
+                          value={
+                            milestoneForm.title
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setMilestoneForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                title:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="Example: Pro Player"
+                          required
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={
+                            milestoneForm.points_required
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setMilestoneForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                points_required:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="150"
+                          required
+                        />
+
+                        <input
+                          type="text"
+                          value={
+                            milestoneForm.description
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setMilestoneForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                description:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="Description"
+                        />
+                      </div>
+
+                      <div className="admin-form-actions">
+                        <button
+                          type="button"
+                          className="admin-cancel-button"
+                          onClick={
+                            closeMilestoneForm
+                          }
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="submit"
+                          className="admin-primary-button"
+                          disabled={
+                            refreshing
+                          }
+                        >
+                          <Check
+                            size={
+                              14
+                            }
+                          />
+                          Save
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {rewardCheckpoints.length ===
+                  0 ? (
+                    <div className="admin-empty">
+                      <div className="admin-empty-icon">
+                        <Trophy
+                          size={
+                            23
+                          }
+                        />
+                      </div>
+
+                      <h3>
+                        No milestones
+                      </h3>
+
+                      <p>
+                        Add your first
+                        membership
+                        milestone.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="announcement-list">
+                      {rewardCheckpoints.map(
+                        (
+                          milestone
+                        ) => (
+                          <div
+                            key={
+                              milestone.id
+                            }
+                            className="announcement-admin-card"
+                          >
+                            <div className="announcement-content">
+                              <div className="announcement-icon">
+                                <Award
+                                  size={
+                                    16
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <div className="announcement-meta">
+                                  <span
+                                    className={
+                                      milestone.is_active
+                                        ? "announcement-live"
+                                        : "announcement-disabled"
+                                    }
+                                  >
+                                    {milestone.is_active
+                                      ? "ACTIVE"
+                                      : "DISABLED"}
+                                  </span>
+                                </div>
+
+                                <h3>
+                                  {
+                                    milestone.title
+                                  }
+                                </h3>
+
+                                <p>
+                                  {milestone.description ||
+                                    "No description"}
+                                </p>
+
+                                <p
+                                  style={{
+                                    marginTop:
+                                      6,
+                                    color:
+                                      "#28734a",
+                                    fontWeight:
+                                      800,
+                                  }}
+                                >
+                                  {
+                                    milestone.points_required
+                                  }{" "}
+                                  points
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="admin-card-actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openEditMilestone(
+                                    milestone
+                                  )
+                                }
+                              >
+                                <Edit3
+                                  size={
+                                    12
+                                  }
+                                />
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleMilestone(
+                                    milestone
+                                  )
+                                }
+                              >
+                                <Power
+                                  size={
+                                    12
+                                  }
+                                />
+                                {milestone.is_active
+                                  ? "Disable"
+                                  : "Enable"}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  deleteMilestone(
+                                    milestone
+                                  )
+                                }
+                              >
+                                <Trash2
+                                  size={
+                                    13
+                                  }
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Reward Offers */}
+              {rewardSubTab ===
+                "offers" && (
+                <>
+                  <div className="admin-panel-title">
+                    <div>
+                      <h2>
+                        Reward Offers
+                      </h2>
+
+                      <p>
+                        Define benefits
+                        members can unlock
+                        with points.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="admin-primary-button"
+                      onClick={
+                        openAddOffer
+                      }
+                    >
+                      <Plus
+                        size={14}
+                      />
+                      Add Reward
+                    </button>
+                  </div>
+
+                  {showOfferForm && (
+                    <form
+                      className="admin-form"
+                      onSubmit={
+                        saveOffer
+                      }
+                    >
+                      <div className="admin-form-heading">
+                        <strong>
+                          {editingOffer
+                            ? "Edit Reward"
+                            : "Create Reward"}
+                        </strong>
+
+                        <span>
+                          Set the points
+                          requirement and
+                          customer benefit.
+                        </span>
+                      </div>
+
+                      <div className="admin-form-fields">
+                        <input
+                          type="text"
+                          value={
+                            offerForm.title
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setOfferForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                title:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="Example: 5% Booking Discount"
+                          required
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={
+                            offerForm.required_points
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setOfferForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                required_points:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="100"
+                          required
+                        />
+
+                        <input
+                          type="text"
+                          value={
+                            offerForm.description
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setOfferForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                description:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="Description"
+                          required
+                        />
+
+                        <input
+                          type="text"
+                          value={
+                            offerForm.benefit
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setOfferForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                benefit:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder="Example: 5% off your booking"
+                          required
+                        />
+
+                        <select
+                          value={
+                            offerForm.discount_type
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setOfferForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                discount_type:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                        >
+                          <option value="percentage">
+                            Percentage
+                          </option>
+
+                          <option value="fixed">
+                            Fixed Amount
+                          </option>
+                        </select>
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={
+                            offerForm.discount_value
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setOfferForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                discount_value:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                          placeholder={
+                            offerForm.discount_type ===
+                            "percentage"
+                              ? "5"
+                              : "300"
+                          }
+                        />
+                      </div>
+
+                      <div className="admin-form-actions">
+                        <button
+                          type="button"
+                          className="admin-cancel-button"
+                          onClick={
+                            closeOfferForm
+                          }
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="submit"
+                          className="admin-primary-button"
+                          disabled={
+                            refreshing
+                          }
+                        >
+                          <Gift
+                            size={
+                              14
+                            }
+                          />
+                          Save Reward
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {rewardOffers.length ===
+                  0 ? (
+                    <div className="admin-empty">
+                      <div className="admin-empty-icon">
+                        <Gift
+                          size={
+                            23
+                          }
+                        />
+                      </div>
+
+                      <h3>
+                        No rewards
+                      </h3>
+
+                      <p>
+                        Create your first
+                        reward offer.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="announcement-list">
+                      {rewardOffers.map(
+                        (offer) => (
+                          <div
+                            key={
+                              offer.id
+                            }
+                            className="announcement-admin-card"
+                          >
+                            <div className="announcement-content">
+                              <div className="announcement-icon">
+                                <Gift
+                                  size={
+                                    16
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <div className="announcement-meta">
+                                  <span
+                                    className={
+                                      offer.is_active
+                                        ? "announcement-live"
+                                        : "announcement-disabled"
+                                    }
+                                  >
+                                    {offer.is_active
+                                      ? "LIVE"
+                                      : "DISABLED"}
+                                  </span>
+                                </div>
+
+                                <h3>
+                                  {
+                                    offer.title
+                                  }
+                                </h3>
+
+                                <p>
+                                  {
+                                    offer.description
+                                  }
+                                </p>
+
+                                <p
+                                  style={{
+                                    marginTop:
+                                      6,
+                                    color:
+                                      "#28734a",
+                                    fontWeight:
+                                      800,
+                                  }}
+                                >
+                                  {
+                                    offer.required_points
+                                  }{" "}
+                                  points ·{" "}
+                                  {
+                                    offer.benefit
+                                  }
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="admin-card-actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openEditOffer(
+                                    offer
+                                  )
+                                }
+                              >
+                                <Edit3
+                                  size={
+                                    12
+                                  }
+                                />
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleOffer(
+                                    offer
+                                  )
+                                }
+                              >
+                                <Power
+                                  size={
+                                    12
+                                  }
+                                />
+                                {offer.is_active
+                                  ? "Disable"
+                                  : "Enable"}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  deleteOffer(
+                                    offer
+                                  )
+                                }
+                              >
+                                <Trash2
+                                  size={
+                                    13
+                                  }
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Reward History */}
+              {rewardSubTab ===
+                "history" && (
+                <>
+                  <div className="admin-panel-title">
+                    <div>
+                      <h2>
+                        Reward History
+                      </h2>
+
+                      <p>
+                        Points earned,
+                        adjusted and
+                        redeemed.
+                      </p>
+                    </div>
+
+                    <div className="admin-count-badge">
+                      {
+                        rewardTransactions.length
+                      }{" "}
+                      transactions
+                    </div>
+                  </div>
+
+                  {rewardTransactions.length ===
+                  0 ? (
+                    <div className="admin-empty">
+                      <div className="admin-empty-icon">
+                        <History
+                          size={
+                            23
+                          }
+                        />
+                      </div>
+
+                      <h3>
+                        No reward
+                        activity
+                      </h3>
+                    </div>
+                  ) : (
+                    <div className="admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>
+                              Member
+                            </th>
+                            <th>
+                              Points
+                            </th>
+                            <th>
+                              Type
+                            </th>
+                            <th>
+                              Description
+                            </th>
+                            <th>
+                              Date
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {rewardTransactions.map(
+                            (
+                              transaction
+                            ) => {
+                              const profile =
+                                getMemberProfile(
+                                  transaction.user_id
+                                );
+
+                              const amount =
+                                Number(
+                                  transaction.points ||
+                                    0
+                                );
+
+                              return (
+                                <tr
+                                  key={
+                                    transaction.id
+                                  }
+                                >
+                                  <td>
+                                    <div className="table-user">
+                                      <div className="table-avatar">
+                                        <UserRound
+                                          size={
+                                            13
+                                          }
+                                        />
+                                      </div>
+
+                                      <strong>
+                                        {profile?.full_name ||
+                                          "Unknown"}
+                                      </strong>
+                                    </div>
+                                  </td>
+
+                                  <td>
+                                    <strong
+                                      style={{
+                                        color:
+                                          amount >=
+                                          0
+                                            ? "#28734a"
+                                            : "#b74a4a",
+                                      }}
+                                    >
+                                      {amount >=
+                                      0
+                                        ? "+"
+                                        : ""}
+                                      {
+                                        amount
+                                      }
+                                    </strong>
+                                  </td>
+
+                                  <td>
+                                    <span className="table-primary">
+                                      {
+                                        transaction.type
+                                      }
+                                    </span>
+                                  </td>
+
+                                  <td>
+                                    {transaction.description ||
+                                      "—"}
+                                  </td>
+
+                                  <td>
+                                    {formatDate(
+                                      transaction.created_at?.slice(
+                                        0,
+                                        10
+                                      )
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {rewardRedemptions.length >
+                    0 && (
+                    <div
+                      style={{
+                        marginTop:
+                          1,
+                        borderTop:
+                          "1px solid #e8edea",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding:
+                            "18px 22px",
+                          fontSize:
+                            12,
+                          fontWeight:
+                            850,
+                          color:
+                            "#26372d",
+                        }}
+                      >
+                        Recent
+                        Redemptions
+                      </div>
+
+                      <div className="admin-table-wrap">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>
+                                Member
+                              </th>
+                              <th>
+                                Points Used
+                              </th>
+                              <th>
+                                Discount
+                              </th>
+                              <th>
+                                Status
+                              </th>
+                              <th>
+                                Date
+                              </th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {rewardRedemptions
+                              .slice(
+                                0,
+                                25
+                              )
+                              .map(
+                                (
+                                  redemption
+                                ) => {
+                                  const profile =
+                                    getMemberProfile(
+                                      redemption.user_id
+                                    );
+
+                                  return (
+                                    <tr
+                                      key={
+                                        redemption.id
+                                      }
+                                    >
+                                      <td>
+                                        <div className="table-user">
+                                          <div className="table-avatar">
+                                            <UserRound
+                                              size={
+                                                13
+                                              }
+                                            />
+                                          </div>
+
+                                          <strong>
+                                            {profile?.full_name ||
+                                              "Unknown"}
+                                          </strong>
+                                        </div>
+                                      </td>
+
+                                      <td>
+                                        {
+                                          redemption.points_used
+                                        }
+                                      </td>
+
+                                      <td>
+                                        {formatMoney(
+                                          redemption.discount_amount
+                                        )}
+                                      </td>
+
+                                      <td>
+                                        <StatusBadge
+                                          status={
+                                            redemption.status
+                                          }
+                                        />
+                                      </td>
+
+                                      <td>
+                                        {formatDate(
+                                          redemption.created_at?.slice(
+                                            0,
+                                            10
+                                          )
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                              )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          {/* =================================================
+              ANNOUNCEMENTS
+              ================================================= */}
+
+          {activeTab ===
+            TABS.ANNOUNCEMENTS && (
+            <section className="admin-panel">
+              <div className="admin-panel-title">
+                <div>
+                  <div className="admin-section-kicker">
+                    CUSTOMER
+                    COMMUNICATION
+                  </div>
+
+                  <h2>
+                    Announcements
+                  </h2>
+
+                  <p>
+                    Publish updates and
+                    operational
+                    messages.
                   </p>
                 </div>
 
@@ -2336,13 +5738,16 @@ function Admin() {
                   className="admin-primary-button"
                   onClick={() =>
                     setShowAnnouncementForm(
-                      (current) => !current
+                      (
+                        current
+                      ) =>
+                        !current
                     )
                   }
                 >
                   <Plus size={14} />
                   {showAnnouncementForm
-                    ? "Close Form"
+                    ? "Close"
                     : "New Announcement"}
                 </button>
               </div>
@@ -2350,50 +5755,71 @@ function Admin() {
               {showAnnouncementForm && (
                 <form
                   className="admin-form"
-                  onSubmit={createAnnouncement}
+                  onSubmit={
+                    createAnnouncement
+                  }
                 >
                   <div className="admin-form-heading">
-                    <strong>Create Announcement</strong>
+                    <strong>
+                      New
+                      Announcement
+                    </strong>
+
                     <span>
-                      This message can appear on the customer
-                      dashboard.
+                      This message can
+                      appear on the
+                      customer dashboard.
                     </span>
                   </div>
 
                   <div className="admin-form-fields">
-                    <div className="admin-form-field full">
-                      <label>TITLE</label>
-
-                      <input
-                        type="text"
-                        value={announcementForm.title}
-                        onChange={(event) =>
-                          setAnnouncementForm((current) => ({
+                    <input
+                      type="text"
+                      value={
+                        announcementForm.title
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setAnnouncementForm(
+                          (
+                            current
+                          ) => ({
                             ...current,
-                            title: event.target.value,
-                          }))
-                        }
-                        placeholder="Example: Weekend booking update"
-                        required
-                      />
-                    </div>
+                            title:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Announcement title"
+                      required
+                    />
 
-                    <div className="admin-form-field full">
-                      <label>MESSAGE</label>
-
-                      <input
-                        type="text"
-                        value={announcementForm.message}
-                        onChange={(event) =>
-                          setAnnouncementForm((current) => ({
+                    <input
+                      type="text"
+                      value={
+                        announcementForm.message
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setAnnouncementForm(
+                          (
+                            current
+                          ) => ({
                             ...current,
-                            message: event.target.value,
-                          }))
-                        }
-                        placeholder="Write the announcement message"
-                        required
-                      />
-                    </div>
+                            message:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Announcement message"
+                      required
+                    />
                   </div>
 
                   <div className="admin-form-actions">
@@ -2401,7 +5827,9 @@ function Admin() {
                       type="button"
                       className="admin-cancel-button"
                       onClick={() =>
-                        setShowAnnouncementForm(false)
+                        setShowAnnouncementForm(
+                          false
+                        )
                       }
                     >
                       Cancel
@@ -2410,86 +5838,117 @@ function Admin() {
                     <button
                       type="submit"
                       className="admin-primary-button"
-                      disabled={refreshing}
                     >
-                      <Megaphone size={14} />
+                      <Megaphone
+                        size={14}
+                      />
                       Publish
                     </button>
                   </div>
                 </form>
               )}
 
-              {announcements.length === 0 ? (
+              {announcements.length ===
+              0 ? (
                 <div className="admin-empty">
                   <div className="admin-empty-icon">
-                    <Megaphone size={23} />
+                    <Megaphone
+                      size={23}
+                    />
                   </div>
 
-                  <h3>No announcements</h3>
-                  <p>
-                    Create your first customer announcement above.
-                  </p>
+                  <h3>
+                    No announcements
+                  </h3>
                 </div>
               ) : (
                 <div className="announcement-list">
-                  {announcements.map((announcement) => (
-                    <div
-                      key={announcement.id}
-                      className="announcement-admin-card"
-                    >
-                      <div className="announcement-content">
-                        <div className="announcement-icon">
-                          <Bell size={16} />
-                        </div>
-
-                        <div>
-                          <div className="announcement-meta">
-                            <span
-                              className={
-                                announcement.is_active
-                                  ? "announcement-live"
-                                  : "announcement-disabled"
+                  {announcements.map(
+                    (
+                      announcement
+                    ) => (
+                      <div
+                        key={
+                          announcement.id
+                        }
+                        className="announcement-admin-card"
+                      >
+                        <div className="announcement-content">
+                          <div className="announcement-icon">
+                            <Bell
+                              size={
+                                16
                               }
-                            >
-                              {announcement.is_active
-                                ? "LIVE"
-                                : "DISABLED"}
-                            </span>
+                            />
                           </div>
 
-                          <h3>{announcement.title}</h3>
-                          <p>{announcement.message}</p>
+                          <div>
+                            <div className="announcement-meta">
+                              <span
+                                className={
+                                  announcement.is_active
+                                    ? "announcement-live"
+                                    : "announcement-disabled"
+                                }
+                              >
+                                {announcement.is_active
+                                  ? "LIVE"
+                                  : "DISABLED"}
+                              </span>
+                            </div>
+
+                            <h3>
+                              {
+                                announcement.title
+                              }
+                            </h3>
+
+                            <p>
+                              {
+                                announcement.message
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="admin-card-actions">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleAnnouncement(
+                                announcement
+                              )
+                            }
+                          >
+                            <Power
+                              size={
+                                12
+                              }
+                            />
+                            {announcement.is_active
+                              ? "Disable"
+                              : "Enable"}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() =>
+                              deleteAnnouncement(
+                                announcement
+                              )
+                            }
+                          >
+                            <Trash2
+                              size={
+                                13
+                              }
+                            />
+                          </button>
                         </div>
                       </div>
-
-                      <div className="admin-card-actions">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            toggleAnnouncement(announcement)
-                          }
-                          disabled={refreshing}
-                        >
-                          <Power size={12} />
-                          {announcement.is_active
-                            ? "Disable"
-                            : "Enable"}
-                        </button>
-
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() =>
-                            deleteAnnouncement(announcement)
-                          }
-                          disabled={refreshing}
-                          title="Delete announcement"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </section>
@@ -2497,339 +5956,601 @@ function Admin() {
         </div>
       </main>
 
+      {/* =====================================================
+          BOOKING DETAIL MODAL
+          ===================================================== */}
+
       {selectedBooking && (
         <div
-          onClick={() => setSelectedBooking(null)}
+          onClick={() =>
+            setSelectedBooking(
+              null
+            )
+          }
           style={{
-            position: "fixed",
+            position:
+              "fixed",
             inset: 0,
             zIndex: 500,
-            background: "rgba(16, 37, 27, 0.42)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:
+              "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
             padding: 20,
+            background:
+              "rgba(16,37,27,.42)",
           }}
         >
           <div
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
             style={{
-              width: "min(560px, 100%)",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              borderRadius: 16,
-              background: "#fff",
-              border: "1px solid #e1e9e4",
-              boxShadow: "0 25px 80px rgba(0,0,0,.18)",
+              width:
+                "min(560px,100%)",
+              maxHeight:
+                "90vh",
+              overflowY:
+                "auto",
+              borderRadius:
+                16,
+              background:
+                "#fff",
+              boxShadow:
+                "0 25px 80px rgba(0,0,0,.18)",
             }}
           >
             <div
               style={{
-                padding: "18px 20px",
-                borderBottom: "1px solid #e8edea",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 15,
+                padding:
+                  "18px 20px",
+                borderBottom:
+                  "1px solid #e8edea",
+                display:
+                  "flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "space-between",
               }}
             >
               <div>
                 <div className="admin-section-kicker">
-                  BOOKING DETAILS
+                  BOOKING
+                  DETAILS
                 </div>
 
                 <h2
                   style={{
-                    margin: "5px 0 0",
-                    fontSize: 17,
-                    color: "#17221d",
-                    fontWeight: 850,
+                    margin:
+                      "5px 0 0",
+                    fontSize:
+                      17,
+                    fontWeight:
+                      850,
+                    color:
+                      "#17221d",
                   }}
                 >
-                  Booking #{selectedBooking.id}
+                  Booking #
+                  {
+                    selectedBooking.id
+                  }
                 </h2>
               </div>
 
               <button
                 type="button"
                 className="admin-cancel-button"
-                onClick={() => setSelectedBooking(null)}
+                onClick={() =>
+                  setSelectedBooking(
+                    null
+                  )
+                }
               >
                 <X size={14} />
               </button>
             </div>
 
-            <div style={{ padding: 20 }}>
-              {(() => {
-                const profile = getProfile(
-                  selectedBooking.user_id
-                );
+            <div
+              style={{
+                padding:
+                  20,
+              }}
+            >
+              <div
+                style={{
+                  display:
+                    "grid",
+                  gridTemplateColumns:
+                    "repeat(2,minmax(0,1fr))",
+                  gap: 10,
+                }}
+              >
+                <div>
+                  <small>
+                    CUSTOMER
+                  </small>
 
-                return (
-                  <>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(2, minmax(0, 1fr))",
-                        gap: 10,
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: 13,
-                          borderRadius: 10,
-                          background: "#f7faf8",
-                        }}
-                      >
-                        <div
-                          style={{
-                            color: "#819087",
-                            fontSize: 8,
-                            fontWeight: 850,
-                            letterSpacing: 0.8,
-                          }}
-                        >
-                          CUSTOMER
-                        </div>
+                  <strong>
+                    {getProfile(
+                      selectedBooking.user_id
+                    )?.full_name ||
+                      "Unknown"}
+                  </strong>
+                </div>
 
-                        <div
-                          style={{
-                            marginTop: 5,
-                            color: "#26372d",
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {profile?.full_name ||
-                            "Unknown customer"}
-                        </div>
+                <div>
+                  <small>
+                    TURF
+                  </small>
 
-                        <div
-                          style={{
-                            marginTop: 3,
-                            color: "#78867f",
-                            fontSize: 9,
-                          }}
-                        >
-                          {profile?.phone || "No phone"}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          padding: 13,
-                          borderRadius: 10,
-                          background: "#f7faf8",
-                        }}
-                      >
-                        <div
-                          style={{
-                            color: "#819087",
-                            fontSize: 8,
-                            fontWeight: 850,
-                            letterSpacing: 0.8,
-                          }}
-                        >
-                          TURF
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: 5,
-                            color: "#26372d",
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {getTurfName(selectedBooking.turf_id)}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          padding: 13,
-                          borderRadius: 10,
-                          background: "#f7faf8",
-                        }}
-                      >
-                        <div
-                          style={{
-                            color: "#819087",
-                            fontSize: 8,
-                            fontWeight: 850,
-                            letterSpacing: 0.8,
-                          }}
-                        >
-                          DATE
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: 5,
-                            color: "#26372d",
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {formatDate(
-                            selectedBooking.booking_date
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          padding: 13,
-                          borderRadius: 10,
-                          background: "#f7faf8",
-                        }}
-                      >
-                        <div
-                          style={{
-                            color: "#819087",
-                            fontSize: 8,
-                            fontWeight: 850,
-                            letterSpacing: 0.8,
-                          }}
-                        >
-                          TIME
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: 5,
-                            color: "#26372d",
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {formatTime(selectedBooking.start_time)}
-                          {" — "}
-                          {formatTime(selectedBooking.end_time)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 16,
-                        padding: 15,
-                        border: "1px solid #e2e9e4",
-                        borderRadius: 10,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 15,
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: "#718078",
-                          fontSize: 10,
-                          fontWeight: 750,
-                        }}
-                      >
-                        TOTAL AMOUNT
-                      </span>
-
-                      <strong
-                        style={{
-                          color: "#246c42",
-                          fontSize: 17,
-                        }}
-                      >
-                        {formatMoney(
-                          selectedBooking.total_amount
-                        )}
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: "#748179",
-                          fontSize: 10,
-                          fontWeight: 700,
-                        }}
-                      >
-                        Status
-                      </span>
-
-                      <StatusBadge
-                        status={selectedBooking.status}
-                      />
-                    </div>
-
-                    {normalizeStatus(
-                      selectedBooking.status
-                    ) === "pending" && (
-                      <div
-                        style={{
-                          marginTop: 18,
-                          display: "flex",
-                          gap: 8,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="booking-confirm"
-                          style={{
-                            flex: 1,
-                            height: 40,
-                          }}
-                          onClick={() =>
-                            updateBookingStatus(
-                              selectedBooking,
-                              "confirmed"
-                            )
-                          }
-                          disabled={
-                            processingBookingId ===
-                            selectedBooking.id
-                          }
-                        >
-                          <Check size={13} />
-                          Confirm Booking
-                        </button>
-
-                        <button
-                          type="button"
-                          className="booking-cancel"
-                          style={{
-                            flex: 1,
-                            height: 40,
-                          }}
-                          onClick={() =>
-                            updateBookingStatus(
-                              selectedBooking,
-                              "cancelled"
-                            )
-                          }
-                          disabled={
-                            processingBookingId ===
-                            selectedBooking.id
-                          }
-                        >
-                          <X size={13} />
-                          Cancel Booking
-                        </button>
-                      </div>
+                  <strong>
+                    {getTurfName(
+                      selectedBooking.turf_id
                     )}
-                  </>
-                );
-              })()}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    DATE
+                  </small>
+
+                  <strong>
+                    {formatDate(
+                      selectedBooking.booking_date
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    TIME
+                  </small>
+
+                  <strong>
+                    {formatTime(
+                      selectedBooking.start_time
+                    )}
+                    {" — "}
+                    {formatTime(
+                      selectedBooking.end_time
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    16,
+                  padding:
+                    14,
+                  border:
+                    "1px solid #e2e9e4",
+                  borderRadius:
+                    10,
+                  display:
+                    "flex",
+                  justifyContent:
+                    "space-between",
+                }}
+              >
+                <span>
+                  Total
+                </span>
+
+                <strong
+                  style={{
+                    color:
+                      "#28734a",
+                  }}
+                >
+                  {formatMoney(
+                    selectedBooking.total_amount
+                  )}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    14,
+                  display:
+                    "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "center",
+                }}
+              >
+                <span>
+                  Status
+                </span>
+
+                <StatusBadge
+                  status={
+                    selectedBooking.status
+                  }
+                />
+              </div>
+
+              {normalizeStatus(
+                selectedBooking.status
+              ) ===
+                "pending" && (
+                <div
+                  style={{
+                    display:
+                      "flex",
+                    gap: 8,
+                    marginTop:
+                      18,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="booking-confirm"
+                    style={{
+                      height: 40,
+                      flex: 1,
+                    }}
+                    onClick={() =>
+                      updateBookingStatus(
+                        selectedBooking,
+                        "confirmed"
+                      )
+                    }
+                  >
+                    <Check
+                      size={
+                        13
+                      }
+                    />
+                    Confirm
+                  </button>
+
+                  <button
+                    type="button"
+                    className="booking-cancel"
+                    style={{
+                      height: 40,
+                      flex: 1,
+                    }}
+                    onClick={() =>
+                      updateBookingStatus(
+                        selectedBooking,
+                        "cancelled"
+                      )
+                    }
+                  >
+                    <X
+                      size={
+                        13
+                      }
+                    />
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* =====================================================
+          MANUAL POINT ADJUSTMENT MODAL
+          ===================================================== */}
+
+      {showPointsForm &&
+        selectedRewardMember && (
+          <div
+            onClick={
+              closePointsForm
+            }
+            style={{
+              position:
+                "fixed",
+              inset: 0,
+              zIndex: 550,
+              display:
+                "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              padding: 20,
+              background:
+                "rgba(16,37,27,.42)",
+            }}
+          >
+            <div
+              onClick={(
+                event
+              ) =>
+                event.stopPropagation()
+              }
+              style={{
+                width:
+                  "min(460px,100%)",
+                borderRadius:
+                  16,
+                background:
+                  "#fff",
+                boxShadow:
+                  "0 25px 80px rgba(0,0,0,.18)",
+              }}
+            >
+              <div
+                style={{
+                  padding:
+                    "18px 20px",
+                  borderBottom:
+                    "1px solid #e8edea",
+                  display:
+                    "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "center",
+                }}
+              >
+                <div>
+                  <div className="admin-section-kicker">
+                    MEMBER
+                    POINTS
+                  </div>
+
+                  <h2
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      fontSize:
+                        17,
+                      fontWeight:
+                        850,
+                    }}
+                  >
+                    Adjust Points
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  className="admin-cancel-button"
+                  onClick={
+                    closePointsForm
+                  }
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <form
+                onSubmit={
+                  handlePointsSubmit
+                }
+                style={{
+                  padding:
+                    20,
+                }}
+              >
+                <div
+                  style={{
+                    padding:
+                      14,
+                    borderRadius:
+                      10,
+                    background:
+                      "#f6faf7",
+                    border:
+                      "1px solid #e1e9e4",
+                  }}
+                >
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      color:
+                        "#26372d",
+                      fontSize:
+                        12,
+                    }}
+                  >
+                    {getMemberProfile(
+                      selectedRewardMember.user_id
+                    )?.full_name ||
+                      "Unknown Member"}
+                  </strong>
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        4,
+                      color:
+                        "#7c8981",
+                      fontSize:
+                        10,
+                    }}
+                  >
+                    Current points:{" "}
+                    {
+                      selectedRewardMember.points
+                    }
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    marginTop:
+                      14,
+                    display:
+                      "grid",
+                    gap: 10,
+                  }}
+                >
+                  <select
+                    value={
+                      pointsForm.action
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPointsForm(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          action:
+                            event
+                              .target
+                              .value,
+                        })
+                      )
+                    }
+                    style={{
+                      height:
+                        40,
+                      border:
+                        "1px solid #dce4df",
+                      borderRadius:
+                        8,
+                      padding:
+                        "0 11px",
+                      fontFamily:
+                        "inherit",
+                      fontSize:
+                        11,
+                      background:
+                        "#fff",
+                    }}
+                  >
+                    <option value="add">
+                      Add points
+                    </option>
+
+                    <option value="remove">
+                      Remove points
+                    </option>
+                  </select>
+
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={
+                      pointsForm.points
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPointsForm(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          points:
+                            event
+                              .target
+                              .value,
+                        })
+                      )
+                    }
+                    placeholder="Points"
+                    required
+                    style={{
+                      height:
+                        40,
+                      border:
+                        "1px solid #dce4df",
+                      borderRadius:
+                        8,
+                      padding:
+                        "0 11px",
+                      fontFamily:
+                        "inherit",
+                      fontSize:
+                        11,
+                      outline:
+                        "none",
+                    }}
+                  />
+
+                  <input
+                    type="text"
+                    value={
+                      pointsForm.description
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPointsForm(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          description:
+                            event
+                              .target
+                              .value,
+                        })
+                      )
+                    }
+                    placeholder="Reason / description"
+                    style={{
+                      height:
+                        40,
+                      border:
+                        "1px solid #dce4df",
+                      borderRadius:
+                        8,
+                      padding:
+                        "0 11px",
+                      fontFamily:
+                        "inherit",
+                      fontSize:
+                        11,
+                      outline:
+                        "none",
+                    }}
+                  />
+                </div>
+
+                <div className="admin-form-actions">
+                  <button
+                    type="button"
+                    className="admin-cancel-button"
+                    onClick={
+                      closePointsForm
+                    }
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="admin-primary-button"
+                    disabled={
+                      refreshing
+                    }
+                  >
+                    <Zap
+                      size={
+                        14
+                      }
+                    />
+                    Update Points
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
     </div>
   );
 }
